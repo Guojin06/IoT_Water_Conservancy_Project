@@ -140,38 +140,56 @@
                 };
 
                 const connectWebSocket = () => {
-                    const wsUrl = 'ws://localhost:8081';
-                    wsClient.value = new WebSocketClient(wsUrl);
-                    wsClient.value.onOpen = () => wsStatus.value = { text: '已连接', className: 'connected' };
-                    wsClient.value.onClose = () => wsStatus.value = { text: '已断开', className: 'disconnected' };
-                    wsClient.value.onError = () => wsStatus.value = { text: '连接错误', className: 'error' };
-                    wsClient.value.onMessage = (event) => {
+                    // 使用全局WebSocket客户端实例（如果存在）
+                    if (window.wsClient) {
+                        wsClient.value = window.wsClient;
+                    } else {
+                        // 如果全局实例不存在，创建新的（不自动连接）
+                        wsClient.value = new WebSocketClient('ws://localhost:8081');
+                    }
+
+                    // 注册回调函数
+                    wsClient.value.on('onConnect', () => {
+                        wsStatus.value = { text: '已连接', className: 'connected' };
+                    });
+                    
+                    wsClient.value.on('onDisconnect', () => {
+                        wsStatus.value = { text: '已断开', className: 'disconnected' };
+                    });
+                    
+                    wsClient.value.on('onError', () => {
+                        wsStatus.value = { text: '连接错误', className: 'error' };
+                    });
+
+                    // 处理传感器数据
+                    wsClient.value.on('onSensorData', (message) => {
                         try {
-                            const message = JSON.parse(event.data);
-                            if (message.type === 'sensor_data') {
-                                const data = message;
-                                const sensorId = data.sensor_id;
+                            const data = message.payload;
+                            const sensorId = data.sensor_id;
 
-                                if (sensors.value[sensorId]) {
-                                    const sensorRef = sensors.value[sensorId];
-                                    
-                                    let displayValue = data.value;
-                                    const sensorInfo = sensors.value[sensorId];
+                            if (sensors.value[sensorId]) {
+                                const sensorRef = sensors.value[sensorId];
+                                
+                                let displayValue = data.value;
+                                const sensorInfo = sensors.value[sensorId];
 
-                                    // 从API获取到的静态信息中读取states数组
-                                    if(data.sensor_type === 'device_status' && sensorInfo && Array.isArray(sensorInfo.states)) {
-                                        displayValue = sensorInfo.states[data.value];
-                                    }
-
-                                    sensorRef.current_value = `${displayValue} ${data.unit || ''}`.trim();
-                                    sensorRef.last_updated = new Date(data.timestamp).toLocaleTimeString();
+                                // 从API获取到的静态信息中读取states数组
+                                if(data.sensor_type === 'device_status' && sensorInfo && Array.isArray(sensorInfo.states)) {
+                                    displayValue = sensorInfo.states[data.value];
                                 }
+
+                                sensorRef.current_value = `${displayValue} ${data.unit || ''}`.trim();
+                                sensorRef.last_updated = new Date(data.timestamp).toLocaleTimeString();
                             }
                         } catch (error) {
                             console.error('解析WebSocket消息失败:', error);
                         }
-                    };
-                    wsClient.value.connect();
+                    });
+
+                    // 更新当前状态
+                    if (wsClient.value.isConnected) {
+                        wsStatus.value = { text: '已连接', className: 'connected' };
+                    }
                 };
 
                 onMounted(() => {
