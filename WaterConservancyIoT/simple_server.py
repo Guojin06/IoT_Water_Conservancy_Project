@@ -15,7 +15,7 @@ import logging
 from typing import Optional, Dict, Any
 
 # 新增的import
-from auth_service import AuthService
+from auth_service import AuthService, initialize_default_admin # 导入初始化函数
 from mysql_client import MySQLClient
 from redis_client import RedisClient
 
@@ -27,6 +27,9 @@ mysql_cli = MySQLClient(host='localhost', database='sensordatabase', user='root'
 redis_cli = RedisClient()
 # 修正: 初始化 AuthService 时传入 secret_key 和 mysql_client
 auth_service = AuthService(secret_key=JWT_SECRET_KEY, mysql_client=mysql_cli)
+
+# 新增: 每次服务器启动时，都检查并确保默认管理员存在
+initialize_default_admin(auth_service)
 
 
 class WaterIoTHandler(http.server.SimpleHTTPRequestHandler):
