@@ -42,9 +42,7 @@ CREATE TABLE `users` (
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- 插入默认管理员用户 (密码: admin123)
-INSERT INTO `users` (`username`, `password_hash`, `role`) VALUES 
-('admin', 'scrypt:32768:8:1$zQxvBvP6uFHvJJNY$46267b8b4b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b4b8b', 'admin');
+-- 注意: 默认管理员将通过程序自动创建，用户名: admin, 密码: admin123
 
 -- 显示创建结果
 SHOW TABLES;

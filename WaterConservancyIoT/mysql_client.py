@@ -177,8 +177,8 @@ class MySQLClient:
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """根据用户名查询用户信息"""
-        # 修正: 使用正确的列名 `user_id` 并用别名 `id` 返回，以兼容上层代码
-        query = "SELECT user_id as id, username, password_hash, role FROM users WHERE username = %s"
+        # 修正: 使用正确的列名 `id`
+        query = "SELECT id, username, password_hash, role FROM users WHERE username = %s"
         # 修正: 使用新的 fetch_query 方法并只取一条
         return self.fetch_query(query, (username,), fetch_one=True)
 

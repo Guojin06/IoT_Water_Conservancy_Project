@@ -77,9 +77,9 @@ def initialize_default_admin(auth_service: AuthService):
     """如果admin用户不存在，则创建它"""
     if not auth_service.mysql_client.get_user_by_username("admin"):
         print("未找到admin用户，正在创建默认管理员...")
-        success = auth_service.register_user("admin", "password123", "admin")
+        success = auth_service.register_user("admin", "admin123", "admin")
         if success:
-            print("✅ 成功创建默认管理员(admin/password123)。")
+            print("✅ 成功创建默认管理员(admin/admin123)。")
         else:
             print("❌ 创建默认管理员失败。")
     else:
