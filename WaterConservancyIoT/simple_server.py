@@ -14,6 +14,10 @@ import os
 import logging
 from typing import Optional, Dict, Any
 
+# --- 日志配置 ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # 新增的import
 from auth_service import AuthService, initialize_default_admin # 导入初始化函数
 from mysql_client import MySQLClient

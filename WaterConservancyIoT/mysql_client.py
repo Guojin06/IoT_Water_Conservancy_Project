@@ -65,22 +65,51 @@ class MySQLClient:
             if cursor:
                 cursor.close()
     
+    def fetch_query(self, query: str, params: Optional[tuple] = None, fetch_one: bool = False) -> Optional[List[Dict[str, Any]]]:
+        """
+        执行一个SELECT查询并返回结果。
+        :param query: SQL查询语句
+        :param params: 查询参数
+        :param fetch_one: 是否只返回一条记录
+        :return: 结果列表或单个结果字典
+        """
+        if not self.is_connected():
+            logger.warning("MySQL未连接，跳过查询执行。")
+            return None
+        
+        cursor = None
+        try:
+            # dictionary=True 让游标返回字典而不是元组
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute(query, params or ())
+            if fetch_one:
+                return cursor.fetchone()
+            else:
+                return cursor.fetchall()
+        except Error as e:
+            logger.error(f"执行查询时出错: {e}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+
     def upsert_sensors(self, sensors_data: List[Dict[str, Any]]) -> None:
         """
         插入或更新传感器信息。如果传感器ID已存在，则更新；否则插入新记录。
         :param sensors_data: 包含传感器信息的字典列表
         """
         query = """
-            INSERT INTO sensors (sensor_id, sensor_type, location, description, name)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO sensors (sensor_id, sensor_type, location, description, name, states)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
             sensor_type = VALUES(sensor_type),
             location = VALUES(location),
             description = VALUES(description),
-            name = VALUES(name);
+            name = VALUES(name),
+            states = VALUES(states);
         """
         # 将字典列表转换为元组列表
-        values = [(s['sensor_id'], s['sensor_type'], s['location'], s['description'], s['name']) for s in sensors_data]
+        values = [(s['sensor_id'], s['sensor_type'], s['location'], s['description'], s['name'], s['states']) for s in sensors_data]
         try:
             # 使用 executemany 来批量插入/更新
             self.execute_query(query, values, multi=True)
@@ -130,18 +159,17 @@ class MySQLClient:
         """从数据库中查询并返回所有传感器的列表。"""
         query = "SELECT sensor_id, name, sensor_type, location, description, states FROM sensors ORDER BY sensor_id"
         try:
-            results = self.execute_query(query, fetch="all")
+            results = self.fetch_query(query) # 修正: 使用新的 fetch_query 方法
             sensors = []
             if results:
                 for row in results:
-                    sensors.append({
-                        "sensor_id": row[0],
-                        "name": row[1],
-                        "sensor_type": row[2],
-                        "location": row[3],
-                        "description": row[4],
-                        "states": json.loads(row[5]) if row[5] else None,
-                    })
+                    # 'states' 从数据库读出来是字符串，需要解析回JSON对象
+                    if isinstance(row.get('states'), str):
+                        try:
+                            row['states'] = json.loads(row['states'])
+                        except json.JSONDecodeError:
+                            row['states'] = None # 解析失败则设为None
+                    sensors.append(row)
             return sensors
         except Error as e:
             logger.error(f"查询所有传感器失败: {e}")
@@ -151,17 +179,8 @@ class MySQLClient:
         """根据用户名查询用户信息"""
         # 修正: 使用正确的列名 `user_id` 并用别名 `id` 返回，以兼容上层代码
         query = "SELECT user_id as id, username, password_hash, role FROM users WHERE username = %s"
-        cursor = None
-        try:
-            cursor = self.connection.cursor(dictionary=True)
-            cursor.execute(query, (username,))
-            return cursor.fetchone()
-        except Error as e:
-            logger.error(f"查询用户 '{username}' 失败: {e}")
-            return None
-        finally:
-            if cursor:
-                cursor.close()
+        # 修正: 使用新的 fetch_query 方法并只取一条
+        return self.fetch_query(query, (username,), fetch_one=True)
 
     def create_user(self, username: str, password_hash: str, role: str) -> bool:
         """创建一个新用户"""

@@ -48,6 +48,57 @@ class DataProducer:
             "GATE002": {"name": "泄洪闸02", "type": "device_status", "location": "B区", "unit": "status", "states": ["关闭", "开启", "告警"]},
         }
 
+    def _create_tables_if_not_exist(self):
+        """检查并创建所有需要的数据库表。"""
+        if not self.mysql_client.is_connected():
+            return
+        
+        # 使用 DATABASE_DESIGN.md 中的建表语句作为权威来源
+        create_sensors_table = """
+        CREATE TABLE IF NOT EXISTS `sensors` (
+          `sensor_id` varchar(50) NOT NULL,
+          `name` varchar(100) DEFAULT NULL,
+          `sensor_type` varchar(50) NOT NULL,
+          `location` varchar(100) DEFAULT NULL,
+          `description` text,
+          `states` json DEFAULT NULL,
+          PRIMARY KEY (`sensor_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """
+        
+        create_sensor_readings_table = """
+        CREATE TABLE IF NOT EXISTS `sensor_readings` (
+          `id` bigint NOT NULL AUTO_INCREMENT,
+          `sensor_id` varchar(50) NOT NULL,
+          `timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          `value` varchar(255) NOT NULL,
+          `unit` varchar(20) DEFAULT NULL,
+          `status` varchar(50) DEFAULT 'normal',
+          PRIMARY KEY (`id`),
+          KEY `idx_sensor_timestamp` (`sensor_id`,`timestamp`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """
+
+        create_daily_statistics_table = """
+        CREATE TABLE IF NOT EXISTS `daily_statistics` (
+          `id` int NOT NULL AUTO_INCREMENT,
+          `record_date` date NOT NULL,
+          `total_water_supply` decimal(10,2) DEFAULT '0.00',
+          `total_power_generation` decimal(10,2) DEFAULT '0.00',
+          `peak_flow_rate` decimal(10,2) DEFAULT NULL,
+          `average_water_level` decimal(10,2) DEFAULT NULL,
+          `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `record_date` (`record_date`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """
+        
+        logger.info("正在检查并按需创建数据库表...")
+        self.mysql_client.execute_query(create_sensors_table)
+        self.mysql_client.execute_query(create_sensor_readings_table)
+        self.mysql_client.execute_query(create_daily_statistics_table)
+        logger.info("✅ 数据库表结构检查完成。")
+
     def initialize_sensors_in_db(self):
         """
         将配置文件中的传感器信息同步到MySQL的 `sensors` 表中。
@@ -64,7 +115,8 @@ class DataProducer:
                 "location": info["location"],
                 "name": info["name"],
                 "description": f"{info['location']} 的 {info['name']} ({info['type']}) 传感器",
-                "states": json.dumps(info.get("states")) if info.get("states") else None
+                # 修正: 确保states字段被正确地序列化和插入
+                "states": json.dumps(info.get("states"), ensure_ascii=False) if info.get("states") else None
             })
         self.mysql_client.upsert_sensors(sensors_list)
 
@@ -74,29 +126,32 @@ class DataProducer:
         sensor_info = self.sensors[sensor_id]
         
         value: Any
+        status = "normal" # 默认状态
         # 针对不同类型的传感器生成数据
         if sensor_info["type"] == "device_status":
             # 为设备状态生成随机状态 (0, 1, 2)
             # 80%概率是正常状态(0或1), 20%是告警(2)
             if random.random() < 0.2:
                 value = 2 # 故障/告警
+                status = "alert"
             else:
                 value = random.randint(0, 1) # 关闭/运行
+                status = "ok"
         else:
             # 为数值型传感器生成数据
             value = round(random.uniform(sensor_info["min"], sensor_info["max"]), 2)
             # 5%的概率产生突变值
             if random.random() < 0.05:
                 value = round(value * random.uniform(1.2, 1.5), 2)
+                status = "warning"
 
+        # 修正: 返回的字典中不应包含 value 的中文解释
         return {
             "timestamp": datetime.now().isoformat(),
-            "value": value,
+            "value": value, # 确保 device_status 发送的是数字 0, 1, 2
             "unit": sensor_info["unit"],
-            "status": "normal", # 状态逻辑可以后续细化
-            "sensor_type": sensor_info["type"],
-            "location": sensor_info["location"],
-            "name": sensor_info["name"]
+            "status": status,
+            "sensor_id": sensor_id # 确保 sensor_id 包含在内
         }
 
     def update_and_broadcast_statistics(self):
@@ -139,7 +194,9 @@ class DataProducer:
             
         logger.info("🚀 启动数据生产者 (Redis & MySQL 双写模式)...")
         
-        # 启动时，先确保所有传感器信息都已写入数据库
+        # 启动时，先确保所有表都已创建
+        self._create_tables_if_not_exist()
+        # 然后，确保所有传感器信息都已写入数据库
         self.initialize_sensors_in_db()
         
         logger.info(f"将为 {len(self.sensors)} 个传感器生成数据，每 {interval_seconds} 秒随机更新其中一个。")
@@ -159,16 +216,15 @@ class DataProducer:
                 self.redis_client.publish_sensor_data(sensor_id_to_update, data)
                 
                 # 2. 写入MySQL用于持久化存储
-                mysql_data = data.copy()
-                mysql_data['sensor_id'] = sensor_id_to_update
-                # 如果是设备状态，需要将value转为可存储的格式
-                if self.sensors[sensor_id_to_update]["type"] == "device_status":
-                    mysql_data['value'] = str(mysql_data['value'])
-
-                self.mysql_client.insert_sensor_reading(mysql_data)
+                # 确保 sensor_id 在数据中
+                data_for_mysql = data.copy()
+                data_for_mysql['sensor_id'] = sensor_id_to_update
+                # value 统一转为字符串以便存入 VARCHAR 列
+                data_for_mysql['value'] = str(data_for_mysql['value'])
+                self.mysql_client.insert_sensor_reading(data_for_mysql)
 
                 value_display = data['value']
-                if isinstance(value_display, int):
+                if isinstance(value_display, int) and 'states' in self.sensors[sensor_id_to_update]:
                      value_display = self.sensors[sensor_id_to_update]['states'][value_display]
 
                 logger.info(f"更新 {sensor_id_to_update} ({data['name']}): value={value_display}")
