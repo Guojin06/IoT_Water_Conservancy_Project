@@ -50,7 +50,12 @@ class RedisClient:
             # 用于存储最新数据的键
             latest_data_key = f"sensor:{sensor_id}:latest"
             
-            message = json.dumps(data)
+            # 修正: 统一所有发布到WebSocket的消息结构
+            message_payload = {
+                "type": "sensor_data",
+                "payload": data
+            }
+            message = json.dumps(message_payload)
             
             # 1. 发布到频道，通知所有监听者（例如WebSocket服务器）
             self.client.publish(channel_name, message)
@@ -75,21 +80,22 @@ class RedisClient:
 
         try:
             latest_data_key = f"sensor:{sensor_id}:latest"
-            data = self.client.hgetall(latest_data_key)
-            
-            if not data:
+            # 修正: hgetall 返回的是字符串字典，需要手动转换
+            raw_data = self.client.hgetall(latest_data_key)
+
+            if not raw_data:
                 logger.warning(f"在Redis中未找到传感器 {sensor_id} 的最新数据。")
                 return None
             
             # Redis返回的值都是字符串，需要做类型转换
-            # (这里简化处理，实际应用中可能需要更复杂的类型转换逻辑)
-            for key, value in data.items():
+            data = {}
+            for key, value in raw_data.items():
                 try:
                     # 尝试转换为浮点数
                     data[key] = float(value)
                 except (ValueError, TypeError):
                     # 转换失败则保持为字符串
-                    pass
+                    data[key] = value
             return data
         except redis.exceptions.RedisError as e:
             logger.error(f"从Redis获取数据时出错 for {sensor_id}: {e}")
@@ -100,10 +106,10 @@ class RedisClient:
         将统计数据发布到指定的频道。
         """
         channel = "statistics:updates"
+        # 修正: 统一所有发布到WebSocket的消息结构
         message = json.dumps({
             "type": "statistic_data",
-            "timestamp": datetime.now().isoformat(),
-            "data": data
+            "payload": data  # 直接使用data作为payload
         })
         try:
             self.client.publish(channel, message)

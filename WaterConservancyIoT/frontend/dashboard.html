@@ -501,42 +501,59 @@
                 },
 
                 connectWebSocket() {
-                    const wsUrl = 'ws://localhost:8081';
-                    this.wsClient = new WebSocketClient(wsUrl);
+                    // 使用 websocket-client.js 中创建的全局实例
+                    if (!window.wsClient) {
+                        console.error("WebSocket客户端未初始化!");
+                        // 如果尚未初始化，则延迟重试
+                        setTimeout(() => this.connectWebSocket(), 500);
+                        return;
+                    }
 
-                    this.wsClient.onOpen = () => {
-                        console.log('WebSocket connection established.');
-                        this.wsStatus = { text: '已连接', className: 'connected' };
-                    };
-
-                    this.wsClient.onClose = () => {
-                        console.warn('WebSocket connection closed.');
-                        this.wsStatus = { text: '已断开', className: 'disconnected' };
-                    };
-
-                    this.wsClient.onError = () => {
-                        console.error('WebSocket connection error.');
-                        this.wsStatus = { text: '连接错误', className: 'error' };
-                    };
-                    
-                    // **核心：数据分发中心**
-                    this.wsClient.onMessage = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-                            if (message.type === 'sensor_data') {
-                                this.dispatchSensorData(message.data);
-                            } else if (message.type === 'statistic_data') {
-                                this.dispatchStatisticData(message.data);
-                            }
-                        } catch (error) {
-                            console.error('Error parsing WebSocket message:', error);
+                    const onMessageCallback = (message) => {
+                        // websocket-client.js 已经为我们解析了JSON
+                        // 我们只需要根据类型分发 payload
+                        if (message.type === 'sensor_data') {
+                            this.dispatchSensorData(message.payload); 
+                        } else if (message.type === 'statistic_data') {
+                            this.dispatchStatisticData(message.payload);
                         }
                     };
 
-                    this.wsClient.connect();
+                    const onConnectCallback = () => {
+                        this.wsStatus = { text: '已连接', className: 'connected' };
+                        const statusElement = document.getElementById('ws-status');
+                        if (statusElement) {
+                            statusElement.textContent = '✅ 已连接';
+                            statusElement.className = 'ws-status connected';
+                        }
+                    };
+                    
+                    const onDisconnectCallback = () => {
+                        this.wsStatus = { text: '已断开', className: 'disconnected' };
+                         const statusElement = document.getElementById('ws-status');
+                        if (statusElement) {
+                            statusElement.textContent = '🟡 已断开';
+                            statusElement.className = 'ws-status disconnected';
+                        }
+                    };
+
+                    // 注册回调
+                    // onSensorData 和 onStatisticData 都会触发同一个处理函数
+                    window.wsClient.on('onSensorData', onMessageCallback);
+                    window.wsClient.on('onStatisticData', onMessageCallback);
+                    window.wsClient.on('onConnect', onConnectCallback);
+                    window.wsClient.on('onDisconnect', onDisconnectCallback);
+                    
+                    // 立即检查当前连接状态以更新UI
+                    if (window.wsClient.isConnected) {
+                        onConnectCallback();
+                    } else {
+                        onDisconnectCallback();
+                    }
                 },
                 
                 dispatchSensorData(data) {
+                    if (!data) return; // 安全检查
                     const sensorId = data.sensor_id;
 
                     // 1. 更新顶部大卡片
@@ -563,8 +580,8 @@
                 },
 
                 dispatchStatisticData(data) {
-                    this.dailyWaterSupply = data.daily_water_supply;
-                    this.dailyPowerGen = data.daily_power_generation;
+                    this.dailyWaterSupply = data.daily_water_supply.toFixed(1);
+                    this.dailyPowerGen = data.daily_power_generation.toFixed(1);
                 },
                 
                 initCharts() {

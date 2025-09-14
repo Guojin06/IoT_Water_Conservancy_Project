@@ -12,6 +12,7 @@ class WebSocketClient {
         this.isConnected = false;
         this.callbacks = {
             onSensorData: [],
+            onStatisticData: [], // 新增
             onAlert: [],
             onSystemStatus: [],
             onConnect: [],
@@ -99,6 +100,9 @@ class WebSocketClient {
                     this.triggerCallbacks('onSensorData', message);
                     this.updateSensorDisplay(message);
                     break;
+                case 'statistic_data': // 新增
+                    this.triggerCallbacks('onStatisticData', message);
+                    break;
                 case 'alert':
                     this.triggerCallbacks('onAlert', message);
                     this.showAlert(message);
@@ -113,7 +117,7 @@ class WebSocketClient {
                     console.log('📋 未知消息类型:', message.type);
             }
         } catch (error) {
-            console.error('❌ 解析WebSocket消息失败:', error);
+            console.error('❌ 解析WebSocket消息失败:', error, '原始数据:', data);
         }
     }
     

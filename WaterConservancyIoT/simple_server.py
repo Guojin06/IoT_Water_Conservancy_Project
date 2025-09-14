@@ -19,10 +19,14 @@ from auth_service import AuthService
 from mysql_client import MySQLClient
 from redis_client import RedisClient
 
+# 定义JWT密钥
+JWT_SECRET_KEY = "your-very-secret-key-that-is-long-and-secure" # 实际项目中应从配置加载
+
 # 全局服务实例
 mysql_cli = MySQLClient(host='localhost', database='sensordatabase', user='root', password='123456')
 redis_cli = RedisClient()
-auth_service = AuthService(mysql_cli)
+# 修正: 初始化 AuthService 时传入 secret_key 和 mysql_client
+auth_service = AuthService(secret_key=JWT_SECRET_KEY, mysql_client=mysql_cli)
 
 
 class WaterIoTHandler(http.server.SimpleHTTPRequestHandler):
@@ -55,9 +59,12 @@ class WaterIoTHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "Username and password are required"}).encode())
                 return
 
-            token = auth_service.authenticate_user(username, password)
+            # 修正: authenticate_user 现在返回一个包含用户信息的字典或None
+            user_info = auth_service.authenticate_user(username, password)
 
-            if token:
+            if user_info:
+                # 从认证成功后的用户信息中创建token
+                token = auth_service.create_jwt_token(user_info['id'])
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
@@ -98,7 +105,8 @@ class WaterIoTHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 
                 # 用户已认证，可以继续处理请求
-                logger.info(f"Authenticated user '{payload.get('name')}' accessed /api/sensors/recent")
+                # 修正: payload['sub'] 存的是 user_id
+                logger.info(f"Authenticated user ID '{payload.get('sub')}' accessed /api/sensors/recent")
                 # ... (处理 /api/sensors/recent 的逻辑，例如从Redis读取数据)
                 # 此处仅为演示，返回一个成功信息
                 self.send_json_response({"message": "Access granted to protected sensor data!"})
