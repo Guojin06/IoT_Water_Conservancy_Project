@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI智能分析 - 智能水利物联网监控系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.0/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #3949ab 100%);
+            min-height: 100vh;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #64b5f6;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-links a {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: rgba(100, 181, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .ai-dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .ai-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .ai-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(100, 181, 246, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #64b5f6;
+        }
+
+        .ai-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.offline {
+            background: #f44336;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #bbdefb;
+            font-weight: 500;
+        }
+
+        .input-group textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .input-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #2196f3, #64b5f6);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #64b5f6;
+        }
+
+        .result-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #64b5f6;
+        }
+
+        .result-content {
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #64b5f6;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(100, 181, 246, 0.3);
+            border-top: 2px solid #64b5f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #f44336;
+        }
+
+        .demo-data {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .demo-data-title {
+            color: #ffc107;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .data-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .data-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #64b5f6;
+        }
+
+        .data-label {
+            font-size: 12px;
+            color: #bbdefb;
+            margin-top: 5px;
+        }
+
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .ai-dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 20px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 头部 -->
+        <div class="header">
+            <div class="header-content">
+                <h1>🤖 AI智能分析中心</h1>
+                <div class="nav-links">
+                    <a href="main.html">🏠 主页</a>
+                    <a href="tech-dashboard.html">📊 监控中心</a>
+                    <a href="#" @click="refreshStatus">🔄 刷新</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主要内容 -->
+        <div class="container">
+            <!-- AI服务状态 -->
+            <div class="ai-card">
+                <div class="card-header">
+                    <span class="card-icon">🤖</span>
+                    <span class="card-title">AI服务状态</span>
+                </div>
+                <div class="ai-status">
+                    <div :class="['status-indicator', aiStatus.ai_enabled ? '' : 'offline']"></div>
+                    <span>{{ aiStatus.ai_enabled ? 'AI服务已启用' : 'AI服务未配置' }}</span>
+                </div>
+                <div v-if="aiStatus.provider">
+                    <p><strong>服务商:</strong> {{ aiStatus.provider }}</p>
+                    <p><strong>模型:</strong> {{ aiStatus.model }}</p>
+                    <p><strong>状态:</strong> {{ aiStatus.status }}</p>
+                </div>
+                <div v-else class="demo-data">
+                    <div class="demo-data-title">💡 演示模式</div>
+                    <p>当前运行在演示模式下，显示模拟的AI分析结果</p>
+                    <p><strong>推荐免费AI服务商：</strong></p>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li>🥇 百度千帆 - 1000次/日免费</li>
+                        <li>🥈 阿里通义 - 500次/日免费</li>
+                        <li>🥉 本地模型 - 完全免费</li>
+                    </ul>
+                    <p style="font-size: 12px; color: #ffc107;">详见: ai_service/FREE_AI_GUIDE.md</p>
+                </div>
+            </div>
+
+            <!-- AI功能面板 -->
+            <div class="ai-dashboard">
+                <!-- 趋势分析 -->
+                <div class="ai-card">
+                    <div class="card-header">
+                        <span class="card-icon">📈</span>
+                        <span class="card-title">水位趋势分析</span>
+                    </div>
+                    
+                    <button class="btn btn-primary" @click="analyzeTrend" :disabled="loading.trend">
+                        <span v-if="loading.trend" class="loading">
+                            <div class="loading-spinner"></div>
+                            分析中...
+                        </span>
+                        <span v-else>开始分析</span>
+                    </button>
+
+                    <div v-if="results.trend" class="result-panel">
+                        <div class="result-title">📊 趋势分析结果</div>
+                        <div class="result-content">{{ results.trend }}</div>
+                    </div>
+                </div>
+
+                <!-- 异常检测 -->
+                <div class="ai-card">
+                    <div class="card-header">
+                        <span class="card-icon">🔍</span>
+                        <span class="card-title">异常检测分析</span>
+                    </div>
+                    
+                    <button class="btn btn-primary" @click="detectAnomaly" :disabled="loading.anomaly">
+                        <span v-if="loading.anomaly" class="loading">
+                            <div class="loading-spinner"></div>
+                            检测中...
+                        </span>
+                        <span v-else>开始检测</span>
+                    </button>
+
+                    <div v-if="results.anomaly" class="result-panel">
+                        <div class="result-title">🔍 异常检测结果</div>
+                        <div class="result-content">{{ results.anomaly }}</div>
+                    </div>
+                </div>
+
+                <!-- 智能报告 -->
+                <div class="ai-card">
+                    <div class="card-header">
+                        <span class="card-icon">📋</span>
+                        <span class="card-title">智能报告生成</span>
+                    </div>
+                    
+                    <button class="btn btn-primary" @click="generateReport" :disabled="loading.report">
+                        <span v-if="loading.report" class="loading">
+                            <div class="loading-spinner"></div>
+                            生成中...
+                        </span>
+                        <span v-else>生成报告</span>
+                    </button>
+
+                    <div v-if="results.report" class="result-panel">
+                        <div class="result-title">📋 智能报告</div>
+                        <div class="result-content">{{ results.report }}</div>
+                    </div>
+                </div>
+
+                <!-- 智能问答 -->
+                <div class="ai-card">
+                    <div class="card-header">
+                        <span class="card-icon">💬</span>
+                        <span class="card-title">智能问答助手</span>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>请输入您的问题：</label>
+                        <textarea 
+                            v-model="question" 
+                            placeholder="例如：当前水位是否正常？未来几天的水位趋势如何？"
+                            @keyup.enter="askQuestion"
+                        ></textarea>
+                    </div>
+                    
+                    <button class="btn btn-primary" @click="askQuestion" :disabled="loading.qa || !question.trim()">
+                        <span v-if="loading.qa" class="loading">
+                            <div class="loading-spinner"></div>
+                            思考中...
+                        </span>
+                        <span v-else>提问</span>
+                    </button>
+
+                    <div v-if="results.qa" class="result-panel">
+                        <div class="result-title">💬 AI回答</div>
+                        <div class="result-content">{{ results.qa }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实时数据展示 -->
+            <div class="ai-card">
+                <div class="card-header">
+                    <span class="card-icon">📊</span>
+                    <span class="card-title">实时监控数据</span>
+                </div>
+                
+                <div class="data-grid">
+                    <div class="data-item">
+                        <div class="data-value">{{ currentData.water_level }}m</div>
+                        <div class="data-label">当前水位</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-value">{{ currentData.temperature }}°C</div>
+                        <div class="data-label">水温</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-value">{{ currentData.flow_rate }}L/s</div>
+                        <div class="data-label">流量</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-value">{{ (currentData.quality_score * 100).toFixed(1) }}%</div>
+                        <div class="data-label">水质评分</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div id="trendChart" style="width: 100%; height: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- 错误信息 -->
+            <div v-if="error" class="error-message">
+                <strong>错误:</strong> {{ error }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                aiStatus: {
+                    ai_enabled: false,
+                    provider: null,
+                    model: null,
+                    status: 'unknown'
+                },
+                loading: {
+                    trend: false,
+                    anomaly: false,
+                    report: false,
+                    qa: false
+                },
+                results: {
+                    trend: '',
+                    anomaly: '',
+                    report: '',
+                    qa: ''
+                },
+                question: '',
+                error: '',
+                currentData: {
+                    water_level: 15.2,
+                    temperature: 20.5,
+                    flow_rate: 120,
+                    quality_score: 0.95
+                },
+                demoData: [],
+                chart: null
+            },
+            mounted() {
+                this.initializeApp();
+                this.updateCurrentData();
+                this.initChart();
+                
+                // 定时更新数据
+                setInterval(() => {
+                    this.updateCurrentData();
+                    this.updateChart();
+                }, 5000);
+            },
+            methods: {
+                async initializeApp() {
+                    await this.checkAIStatus();
+                    await this.loadDemoData();
+                },
+                
+                async checkAIStatus() {
+                    try {
+                        const response = await axios.get('http://localhost:5000/api/ai/status');
+                        this.aiStatus = response.data;
+                        this.error = '';
+                    } catch (error) {
+                        console.warn('AI服务连接失败，使用演示模式');
+                        this.aiStatus = {
+                            ai_enabled: false,
+                            provider: null,
+                            model: null,
+                            status: 'offline'
+                        };
+                    }
+                },
+                
+                async loadDemoData() {
+                    try {
+                        const response = await axios.get('http://localhost:5000/api/ai/demo/data');
+                        if (response.data.success) {
+                            this.demoData = response.data.data;
+                        }
+                    } catch (error) {
+                        console.warn('无法加载演示数据');
+                    }
+                },
+                
+                async analyzeTrend() {
+                    this.loading.trend = true;
+                    this.error = '';
+                    
+                    try {
+                        if (this.aiStatus.ai_enabled) {
+                            // 真实AI分析
+                            const response = await axios.post('http://localhost:5000/api/ai/analyze/trend', {
+                                sensor_data: this.demoData
+                            });
+                            
+                            if (response.data.success) {
+                                this.results.trend = response.data.analysis;
+                            } else {
+                                throw new Error(response.data.error);
+                            }
+                        } else {
+                            // 演示模式
+                            await this.delay(2000); // 模拟分析时间
+                            this.results.trend = `🔍 水位趋势分析结果：
+
+📈 总体趋势：水位呈现稳定上升趋势
+📊 当前水位：15.2米，处于正常范围
+📅 预测：未来3-5天水位将上升0.3-0.5米
+
+⚠️ 风险评估：
+• 风险等级：低风险
+• 建议监控频率：每2小时检查一次
+• 预警阈值：18.0米
+
+🎯 运营建议：
+1. 继续保持现有监控频率
+2. 关注天气变化对水位的影响
+3. 检查排水系统运行状态
+4. 准备应急预案以防突发情况
+
+💡 注意：这是演示数据。要启用真实AI功能，推荐使用百度千帆（1000次/日免费）或阿里通义（500次/日免费）`;
+                        }
+                    } catch (error) {
+                        this.error = `趋势分析失败: ${error.message}`;
+                    } finally {
+                        this.loading.trend = false;
+                    }
+                },
+                
+                async detectAnomaly() {
+                    this.loading.anomaly = true;
+                    this.error = '';
+                    
+                    try {
+                        if (this.aiStatus.ai_enabled) {
+                            const response = await axios.post('http://localhost:5000/api/ai/detect/anomaly', {
+                                current_data: this.currentData,
+                                historical_data: this.demoData
+                            });
+                            
+                            if (response.data.success) {
+                                this.results.anomaly = response.data.analysis;
+                            } else {
+                                throw new Error(response.data.error);
+                            }
+                        } else {
+                            // 演示模式
+                            await this.delay(1500);
+                            this.results.anomaly = `🔍 异常检测分析结果：
+
+✅ 系统状态：正常运行
+📊 异常评分：0.15/1.0 (正常范围)
+
+📈 各项指标检测：
+• 水位：15.2米 ✅ 正常
+• 水温：20.5°C ✅ 正常  
+• 流量：120L/s ✅ 正常
+• 水质：95% ✅ 优秀
+
+🕐 最近异常记录：
+• 上次异常：2天前
+• 异常类型：水温轻微波动
+• 处理状态：已自动恢复
+
+🎯 监控建议：
+1. 系统运行状态良好，继续保持
+2. 建议每日检查设备状态
+3. 关注季节性变化对各指标的影响
+
+💡 注意：这是演示数据。要启用真实AI功能，推荐使用百度千帆（1000次/日免费）或阿里通义（500次/日免费）`;
+                        }
+                    } catch (error) {
+                        this.error = `异常检测失败: ${error.message}`;
+                    } finally {
+                        this.loading.anomaly = false;
+                    }
+                },
+                
+                async generateReport() {
+                    this.loading.report = true;
+                    this.error = '';
+                    
+                    try {
+                        if (this.aiStatus.ai_enabled) {
+                            const dataSummary = {
+                                total_sensors: 3,
+                                data_points: 1500,
+                                avg_water_level: 15.2,
+                                anomaly_count: 2,
+                                system_uptime: 0.999
+                            };
+                            
+                            const response = await axios.post('http://localhost:5000/api/ai/generate/report', {
+                                data_summary: dataSummary
+                            });
+                            
+                            if (response.data.success) {
+                                this.results.report = response.data.report;
+                            } else {
+                                throw new Error(response.data.error);
+                            }
+                        } else {
+                            // 演示模式
+                            await this.delay(3000);
+                            this.results.report = `📋 智能水利监控系统日报
+
+📅 报告日期：${new Date().toLocaleDateString()}
+🕐 报告时间：${new Date().toLocaleTimeString()}
+
+📊 系统运行概况：
+• 在线传感器：3/3 (100%)
+• 数据采集点：1,500个
+• 系统运行时长：99.9%
+• 平均响应时间：<50ms
+
+💧 水位监测数据：
+• 当前水位：15.2米
+• 24小时平均：15.1米
+• 最高水位：15.8米 (14:30)
+• 最低水位：14.5米 (06:00)
+• 变化趋势：稳定上升
+
+🌡️ 水质监测数据：
+• 水质评分：95%
+• 温度范围：19.8°C - 21.2°C
+• pH值：7.2 (正常)
+• 溶解氧：8.5mg/L (优秀)
+
+⚠️ 异常事件统计：
+• 异常事件：0起
+• 告警次数：0次
+• 维护提醒：1个 (设备例行检查)
+
+🎯 运营建议：
+1. 系统运行状态优秀，继续保持现有管理模式
+2. 建议下周进行传感器校准
+3. 关注天气预报，准备应对可能的降雨
+4. 考虑增加备用传感器提高系统可靠性
+
+📈 趋势预测：
+基于历史数据分析，预计未来一周水位将保持稳定，波动范围在14.8-15.5米之间。
+
+💡 注意：这是演示报告，实际使用请配置AI API密钥`;
+                        }
+                    } catch (error) {
+                        this.error = `报告生成失败: ${error.message}`;
+                    } finally {
+                        this.loading.report = false;
+                    }
+                },
+                
+                async askQuestion() {
+                    if (!this.question.trim()) return;
+                    
+                    this.loading.qa = true;
+                    this.error = '';
+                    
+                    try {
+                        if (this.aiStatus.ai_enabled) {
+                            const response = await axios.post('http://localhost:5000/api/ai/qa', {
+                                question: this.question,
+                                context_data: {
+                                    current_data: this.currentData,
+                                    recent_data: this.demoData.slice(0, 5)
+                                }
+                            });
+                            
+                            if (response.data.success) {
+                                this.results.qa = response.data.answer;
+                            } else {
+                                throw new Error(response.data.error);
+                            }
+                        } else {
+                            // 演示模式
+                            await this.delay(2000);
+                            this.results.qa = `💬 针对您的问题"${this.question}"，我的回答是：
+
+基于当前监控数据分析：
+
+🔍 系统状态评估：
+• 当前水位15.2米处于正常范围内
+• 各项指标均在标准值范围
+• 系统运行稳定，无异常情况
+
+📊 数据解读：
+• 水质评分95%表示水质优秀
+• 流量120L/s符合预期范围
+• 温度20.5°C适宜，无异常波动
+
+🎯 专业建议：
+1. 继续保持现有监控频率
+2. 建议定期校准传感器设备
+3. 关注天气变化对水位的影响
+4. 如有其他疑问，可随时咨询
+
+💡 注意：这是基于演示数据的回答，实际使用请配置AI API密钥获得更准确的分析。`;
+                        }
+                    } catch (error) {
+                        this.error = `智能问答失败: ${error.message}`;
+                    } finally {
+                        this.loading.qa = false;
+                    }
+                },
+                
+                refreshStatus() {
+                    this.checkAIStatus();
+                    this.loadDemoData();
+                    this.updateCurrentData();
+                },
+                
+                updateCurrentData() {
+                    // 模拟数据变化
+                    this.currentData.water_level = 15.2 + (Math.random() - 0.5) * 0.4;
+                    this.currentData.temperature = 20.5 + (Math.random() - 0.5) * 2;
+                    this.currentData.flow_rate = 120 + (Math.random() - 0.5) * 20;
+                    this.currentData.quality_score = 0.95 + (Math.random() - 0.5) * 0.05;
+                },
+                
+                initChart() {
+                    this.chart = echarts.init(document.getElementById('trendChart'));
+                    this.updateChart();
+                },
+                
+                updateChart() {
+                    if (!this.chart) return;
+                    
+                    const times = [];
+                    const levels = [];
+                    const now = new Date();
+                    
+                    for (let i = 23; i >= 0; i--) {
+                        const time = new Date(now - i * 60 * 60 * 1000);
+                        times.push(time.getHours() + ':00');
+                        levels.push(15.2 + Math.sin(i * 0.3) * 0.5 + (Math.random() - 0.5) * 0.2);
+                    }
+                    
+                    const option = {
+                        backgroundColor: 'transparent',
+                        title: {
+                            text: '24小时水位趋势',
+                            textStyle: { color: '#64b5f6' }
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            borderColor: '#64b5f6',
+                            textStyle: { color: '#fff' }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: times,
+                            axisLine: { lineStyle: { color: '#64b5f6' } },
+                            axisLabel: { color: '#bbdefb' }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            axisLine: { lineStyle: { color: '#64b5f6' } },
+                            axisLabel: { color: '#bbdefb' },
+                            splitLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.1)' } }
+                        },
+                        series: [{
+                            name: '水位(m)',
+                            type: 'line',
+                            smooth: true,
+                            data: levels,
+                            lineStyle: { color: '#64b5f6', width: 3 },
+                            areaStyle: {
+                                color: {
+                                    type: 'linear',
+                                    x: 0, y: 0, x2: 0, y2: 1,
+                                    colorStops: [
+                                        { offset: 0, color: 'rgba(100, 181, 246, 0.3)' },
+                                        { offset: 1, color: 'rgba(100, 181, 246, 0.1)' }
+                                    ]
+                                }
+                            },
+                            symbol: 'circle',
+                            symbolSize: 6,
+                            itemStyle: { color: '#64b5f6' }
+                        }]
+                    };
+                    
+                    this.chart.setOption(option);
+                },
+                
+                delay(ms) {
+                    return new Promise(resolve => setTimeout(resolve, ms));
+                }
+            }
+        });
+    </script>
+</body>
+</html>

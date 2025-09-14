@@ -2,6 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 import logging
 from typing import Dict, Any, List, Optional
+import json
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,7 +36,7 @@ class MySQLClient:
         """检查客户端是否成功连接。"""
         return self.connection is not None and self.connection.is_connected()
 
-    def execute_query(self, query: str, params: Optional[tuple] = None) -> bool:
+    def execute_query(self, query: str, params: Optional[tuple] = None, multi: bool = False) -> bool:
         """
         执行一个通用的SQL查询 (INSERT, UPDATE, DELETE)。
         :param query: SQL查询语句
@@ -49,7 +50,10 @@ class MySQLClient:
         cursor = None
         try:
             cursor = self.connection.cursor()
-            cursor.execute(query, params or ())
+            if multi:
+                cursor.executemany(query, params)
+            else:
+                cursor.execute(query, params or ())
             self.connection.commit()
             return True
         except Error as e:
@@ -67,22 +71,22 @@ class MySQLClient:
         :param sensors_data: 包含传感器信息的字典列表
         """
         query = """
-        INSERT INTO sensors (sensor_id, sensor_type, location, description)
-        VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
+            INSERT INTO sensors (sensor_id, sensor_type, location, description, name)
+            VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
             sensor_type = VALUES(sensor_type),
             location = VALUES(location),
-            description = VALUES(description)
+            description = VALUES(description),
+            name = VALUES(name);
         """
-        for sensor in sensors_data:
-            params = (
-                sensor['sensor_id'],
-                sensor['sensor_type'],
-                sensor.get('location', ''),
-                sensor.get('description', '')
-            )
-            self.execute_query(query, params)
-        logger.info(f"成功同步 {len(sensors_data)} 个传感器信息到数据库。")
+        # 将字典列表转换为元组列表
+        values = [(s['sensor_id'], s['sensor_type'], s['location'], s['description'], s['name']) for s in sensors_data]
+        try:
+            # 使用 executemany 来批量插入/更新
+            self.execute_query(query, values, multi=True)
+            logger.info(f"成功同步 {len(values)} 个传感器信息到数据库。")
+        except Error as e:
+            logger.error(f"同步传感器信息失败: {e}")
 
 
     def insert_sensor_reading(self, reading_data: Dict[str, Any]) -> None:
@@ -103,6 +107,45 @@ class MySQLClient:
         )
         self.execute_query(query, params)
         # logger.info(f"成功插入传感器读数 for {reading_data['sensor_id']}")
+
+    def update_daily_statistics(self, date_str: str, water_supply: float, power_generation: float):
+        """
+        更新每日的统计数据，如供水量和发电量。
+        如果当天的记录已存在，则更新；否则，创建新记录。
+        """
+        query = """
+            INSERT INTO daily_statistics (record_date, total_water_supply, total_power_generation)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+            total_water_supply = VALUES(total_water_supply),
+            total_power_generation = VALUES(total_power_generation);
+        """
+        try:
+            self.execute_query(query, (date_str, water_supply, power_generation))
+            logger.info(f"成功更新 {date_str} 的统计数据。")
+        except Error as e:
+            logger.error(f"更新每日统计数据失败 (date: {date_str}): {e}")
+
+    def get_all_sensors(self):
+        """从数据库中查询并返回所有传感器的列表。"""
+        query = "SELECT sensor_id, name, sensor_type, location, description, states FROM sensors ORDER BY sensor_id"
+        try:
+            results = self.execute_query(query, fetch="all")
+            sensors = []
+            if results:
+                for row in results:
+                    sensors.append({
+                        "sensor_id": row[0],
+                        "name": row[1],
+                        "sensor_type": row[2],
+                        "location": row[3],
+                        "description": row[4],
+                        "states": json.loads(row[5]) if row[5] else None,
+                    })
+            return sensors
+        except Error as e:
+            logger.error(f"查询所有传感器失败: {e}")
+            return []
 
     def close(self):
         """关闭数据库连接。"""

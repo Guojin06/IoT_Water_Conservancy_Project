@@ -21,117 +21,85 @@ class AuthService:
     """
     负责处理用户认证、密码管理和JWT生成/验证的服务。
     """
-    def __init__(self, mysql_client: MySQLClient):
-        self.mysql = mysql_client
+    def __init__(self, secret_key: str, mysql_client: MySQLClient):
+        self.secret_key = secret_key
+        self.mysql_client = mysql_client
 
-    def hash_password(self, plain_password: str) -> str:
+    def hash_password(self, password: str) -> str:
         """使用bcrypt对明文密码进行哈希处理。"""
         salt = bcrypt.gensalt()
-        hashed_password = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
-        return hashed_password.decode('utf-8')
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """验证明文密码是否与哈希密码匹配。"""
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-    def create_jwt_token(self, user_id: int, username: str, role: str) -> str:
-        """为指定用户生成一个JWT。"""
-        payload = {
-            "sub": user_id,  # 'subject', 通常是用户ID
-            "name": username,
-            "role": role,
-            "iat": datetime.now(timezone.utc),  # 'issued at', 签发时间
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRATION_MINUTES)  # 'expiration time', 过期时间
-        }
-        token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-        return token
-
-    def decode_jwt_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """解码并验证一个JWT。如果无效或过期，则返回None。"""
+    def create_jwt_token(self, user_id: int) -> str:
+        """生成JWT令牌"""
         try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = {
+                'sub': str(user_id),  # 修正: 'sub' 必须是字符串
+                'iat': datetime.utcnow(),
+                'exp': datetime.utcnow() + timedelta(days=1)
+            }
+            token = jwt.encode(payload, self.secret_key, algorithm='HS256')
+            return token
+        except Exception as e:
+            print(f"创建JWT时出错: {e}")
+            return None
+
+    def decode_jwt_token(self, token: str):
+        """解码并验证JWT令牌"""
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=['HS256'])
             return payload
         except jwt.ExpiredSignatureError:
-            logger.warning("Token已过期。")
+            print("Token已过期")
             return None
         except jwt.InvalidTokenError as e:
-            logger.error(f"无效的Token: {e}")
+            print(f"无效的Token: {e}")
             return None
 
-    def register_user(self, username: str, plain_password: str, role: str = 'viewer') -> bool:
-        """注册一个新用户，密码将被哈希处理。"""
-        if not self.mysql.is_connected():
-            return False
-        
-        password_hash = self.hash_password(plain_password)
-        query = "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)"
-        params = (username, password_hash, role)
-        
-        success = self.mysql.execute_query(query, params)
+    def register_user(self, username: str, password: str, role: str = 'viewer'):
+        """注册新用户"""
+        hashed_password = self.hash_password(password)
+        return self.mysql_client.create_user(username, hashed_password, role)
+
+    def authenticate_user(self, username, password):
+        """验证用户凭据"""
+        user_data = self.mysql_client.get_user_by_username(username)
+        if user_data and self.verify_password(password, user_data['password_hash']):
+            return {'id': user_data['id'], 'username': user_data['username']}
+        return None
+
+def initialize_default_admin(auth_service: AuthService):
+    """如果admin用户不存在，则创建它"""
+    if not auth_service.mysql_client.get_user_by_username("admin"):
+        print("未找到admin用户，正在创建默认管理员...")
+        success = auth_service.register_user("admin", "password123", "admin")
         if success:
-            logger.info(f"用户 '{username}' 注册成功。")
+            print("✅ 成功创建默认管理员(admin/password123)。")
         else:
-            logger.error(f"用户 '{username}' 注册失败（可能已存在）。")
-        return success
-
-    def authenticate_user(self, username: str, plain_password: str) -> Optional[str]:
-        """
-        验证用户凭证。如果成功，返回生成的JWT；否则返回None。
-        """
-        if not self.mysql.is_connected():
-            return None
-            
-        cursor = None
-        try:
-            cursor = self.mysql.connection.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-            user = cursor.fetchone()
-            
-            if user and self.verify_password(plain_password, user['password_hash']):
-                logger.info(f"用户 '{username}' 认证成功。")
-                return self.create_jwt_token(user['user_id'], user['username'], user['role'])
-            else:
-                logger.warning(f"用户 '{username}' 认证失败（用户名或密码错误）。")
-                return None
-        except Error as e:
-            logger.error(f"认证过程中数据库查询出错: {e}")
-            return None
-        finally:
-            if cursor:
-                cursor.close()
-
-def initialize_default_admin():
-    """
-    在数据库中创建一个默认的管理员账户，方便首次启动和测试。
-    """
-    logger.info("--- 正在初始化默认管理员账户 ---")
-    
-    mysql_cli = MySQLClient(
-        host='localhost',
-        database='sensordatabase',
-        user='root',
-        password='123456'
-    )
-    
-    if not mysql_cli.is_connected():
-        logger.critical("无法连接到数据库，无法创建默认管理员。")
-        return
-
-    auth_service = AuthService(mysql_cli)
-    
-    # 这里我们只在用户不存在时创建，避免重复
-    # 实际应用中可以用更优雅的方式检查用户是否存在
-    logger.info("正在创建默认管理员 'admin' (密码: password123)...")
-    auth_service.register_user(
-        username='admin',
-        plain_password='password123',
-        role='admin'
-    )
-    
-    mysql_cli.close()
-    logger.info("--- 初始化完成 ---")
+            print("❌ 创建默认管理员失败。")
+    else:
+        print("Admin用户已存在。")
 
 
 if __name__ == '__main__':
     # 允许直接运行此文件来创建默认管理员
-    initialize_default_admin()
+    # 注意: 这里需要一个MySQLClient实例来调用initialize_default_admin
+    # 在实际应用中，MySQLClient应该通过依赖注入或工厂模式获取
+    # 为了简化，这里直接创建一个临时的MySQLClient
+    try:
+        mysql_cli = MySQLClient(
+            host='localhost',
+            database='sensordatabase',
+            user='root',
+            password='123456'
+        )
+        auth_service = AuthService(JWT_SECRET_KEY, mysql_cli)
+        initialize_default_admin(auth_service)
+        mysql_cli.close()
+    except Exception as e:
+        print(f"初始化失败: {e}")

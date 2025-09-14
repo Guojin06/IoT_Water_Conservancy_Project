@@ -6,8 +6,7 @@ import asyncio
 import websockets
 import json
 import logging
-import redis.asyncio as redis # 使用异步版本的redis库
-from redis_client import RedisClient # 仍然使用同步客户端进行初始连接检查
+import redis.asyncio as aioredis  # 明确使用 aioredis
 from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -15,96 +14,70 @@ logger = logging.getLogger(__name__)
 
 clients = set()
 
-async def handle_connection(websocket):
-    """处理单个客户端连接。"""
-    logger.info(f"客户端连接: {websocket.remote_address}")
+async def handle_connection(websocket: websockets.WebSocketServerProtocol):
+    """
+    处理单个WebSocket连接，将其注册到客户端集合中，并等待其断开。
+    """
+    logger.info(f"客户端 {websocket.remote_address} 已连接。")
     clients.add(websocket)
     try:
-        welcome_message = {"type": "system_status", "data": {"status": "connected", "message": "Welcome!"}}
-        await websocket.send(json.dumps(welcome_message))
+        # 保持连接开放，直到客户端断开
         await websocket.wait_closed()
-    except websockets.exceptions.ConnectionClosed as e:
-        logger.warning(f"与客户端 {websocket.remote_address} 的连接关闭: {e}")
-    except Exception as e:
-        logger.error(f"与客户端 {websocket.remote_address} 通信时出错: {e}", exc_info=True)
     finally:
-        logger.info(f"客户端断开连接: {websocket.remote_address}")
+        logger.info(f"客户端 {websocket.remote_address} 已断开。")
         clients.remove(websocket)
 
 async def redis_listener():
     """
-    监听Redis频道并向所有WebSocket客户端广播数据。
+    监听Redis频道并将消息向所有已注册的WebSocket客户端广播。
+    这是一个独立的后台任务。
     """
-    # 必须使用异步redis库来实现发布/订阅监听
-    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-    pubsub = r.pubsub()
-    
-    # 订阅所有传感器更新频道
-    await pubsub.psubscribe("sensor:*:updates")
-    logger.info("已订阅Redis频道 'sensor:*:updates'")
-    
-    while True:
+    while True: # 添加外层循环，确保在出错后能自动重连
         try:
-            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-            if message:
-                channel = message['channel']
-                data_str = message['data']
-                logger.info(f"从Redis频道 '{channel}' 收到新数据")
+            # 修正: 使用 aioredis.from_url
+            async with aioredis.from_url("redis://localhost", decode_responses=True) as redis_client:
+                pubsub = redis_client.pubsub()
                 
-                # 重新构造要发送给前端的数据包
-                # data_str 是一个JSON字符串，我们直接转发它
-                try:
-                    sensor_data = json.loads(data_str)
-                    sensor_id = channel.split(':')[1] # 从 'sensor:WL001:updates' 中提取 'WL001'
-                    
-                    frontend_message = {
-                        "type": "sensor_data",
-                        "timestamp": sensor_data.get("timestamp", datetime.now().isoformat()),
-                        "data": {
-                            "sensor_id": sensor_id,
-                            **sensor_data
-                        }
-                    }
-                    
-                    if clients:
-                        message_to_send = json.dumps(frontend_message)
+                await pubsub.psubscribe("sensor:*:updates", "statistics:updates")
+                logger.info("已重新订阅 Redis 频道: 'sensor:*:updates' 和 'statistics:updates'")
+                
+                while True:
+                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=None) # timeout=None 会一直等待
+                    if message and clients:
+                        data_str = message['data']
+                        # 直接转发从Redis收到的原始JSON字符串
                         await asyncio.gather(
-                            *[client.send(message_to_send) for client in clients]
+                            *[client.send(data_str) for client in clients]
                         )
-                except (json.JSONDecodeError, IndexError) as e:
-                    logger.error(f"处理来自Redis的消息时出错: {e} - 原始数据: {data_str}")
-
+        except asyncio.CancelledError:
+            logger.info("Redis监听任务被取消。")
+            break
         except Exception as e:
-            logger.error(f"Redis监听循环出错: {e}", exc_info=True)
-            # 在重试前等待一段时间
+            logger.error(f"Redis监听循环出错: {e}，将在5秒后重试...")
             await asyncio.sleep(5)
 
 async def main():
-    """主函数，启动服务器和Redis监听器。"""
+    """主函数，启动WebSocket服务器和Redis监听器。"""
     logger.info("--- 启动WebSocket服务器 (Redis集成版) ---")
-
-    # 在启动前，先检查一下同步连接是否正常，给用户一个即时反馈
-    sync_redis_client = RedisClient()
-    if not sync_redis_client.is_connected():
-        logger.critical("无法连接到Redis。WebSocket服务器将无法广播数据。请先启动Redis。")
+    
+    # 修正: 检查Redis连接也必须是异步的
+    try:
+        r = aioredis.from_url("redis://localhost")
+        if await r.ping(): # 修正: 添加 await
+            logger.info("✅ 成功连接到Redis服务器 at localhost:6379")
+        await r.close()
+    except Exception as e:
+        logger.critical(f"❌ 无法连接到Redis服务器: {e}。请确保Redis正在运行。")
         return
 
-    # 启动Redis监听任务
     listener_task = asyncio.create_task(redis_listener())
     
-    # 启动WebSocket服务器
-    server = await websockets.serve(handle_connection, "localhost", 8081)
-    
-    logger.info("✅ WebSocket服务器已成功启动于 ws://localhost:8081")
-    logger.info("等待客户端连接...")
-    
-    await server.wait_closed()
-    listener_task.cancel()
+    async with websockets.serve(handle_connection, "localhost", 8081):
+        logger.info("🚀 WebSocket服务器已在 ws://localhost:8081 启动")
+        await asyncio.Future()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("服务器正在关闭。")
-    except Exception as e:
-        logger.critical(f"服务器启动失败: {e}", exc_info=True)
+        logger.info("服务器手动停止。")

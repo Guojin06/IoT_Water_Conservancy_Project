@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能水利系统管理平台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/echarts@5.4.0/dist/echarts.min.js"></script>
+    <script src="js/websocket-client.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        /* 背景大坝图片 */
+        .background-image {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><linearGradient id="water" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:%232196F3;stop-opacity:0.8"/><stop offset="100%" style="stop-color:%230D47A1;stop-opacity:0.6"/></linearGradient></defs><rect width="1200" height="400" fill="url(%23water)"/><polygon points="0,400 1200,400 1200,350 0,350" fill="%23424242" opacity="0.8"/><polygon points="100,350 1100,350 1000,300 200,300" fill="%23616161" opacity="0.9"/></svg>');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.3;
+            z-index: 0;
+        }
+        
+        /* 主容器 */
+        .dashboard {
+            position: relative;
+            z-index: 1;
+            width: 100vw;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            grid-template-rows: 80px 1fr;
+            gap: 10px;
+            padding: 10px;
+        }
+        
+        /* 顶部标题栏 */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(90deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6), rgba(0,0,0,0.8));
+            border: 2px solid rgba(0, 150, 255, 0.5);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header h1 {
+            color: #00D4FF;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            color: #fff;
+        }
+        
+        /* WebSocket连接状态样式 */
+        .ws-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .ws-status.connected {
+            background-color: rgba(0, 255, 0, 0.2);
+            color: #00ff00;
+        }
+        
+        .ws-status.disconnected {
+            background-color: rgba(255, 255, 0, 0.2);
+            color: #ffff00;
+        }
+        
+        .ws-status.failed,
+        .ws-status.error {
+            background-color: rgba(255, 0, 0, 0.2);
+            color: #ff0000;
+        }
+        
+        .time-display {
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* 左侧面板 */
+        .left-panel {
+            background: linear-gradient(145deg, rgba(0,0,0,0.85), rgba(30,60,114,0.3));
+            border: 2px solid rgba(0, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* 右侧面板 */
+        .right-panel {
+            background: linear-gradient(145deg, rgba(0,0,0,0.85), rgba(30,60,114,0.3));
+            border: 2px solid rgba(0, 150, 255, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* 中央主区域 */
+        .main-area {
+            background: linear-gradient(145deg, rgba(0,0,0,0.7), rgba(30,60,114,0.2));
+            border: 2px solid rgba(0, 150, 255, 0.4);
+            border-radius: 8px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 20px;
+        }
+        
+        /* 数据卡片 */
+        .data-card {
+            background: linear-gradient(145deg, rgba(0,0,0,0.6), rgba(0,150,255,0.1));
+            border: 1px solid rgba(0, 150, 255, 0.4);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .data-card:hover {
+            border-color: rgba(0, 150, 255, 0.8);
+            box-shadow: 0 0 15px rgba(0, 150, 255, 0.3);
+        }
+        
+        .data-card h3 {
+            color: #00D4FF;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .data-value {
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .data-unit {
+            color: #aaa;
+            font-size: 12px;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff00;
+            box-shadow: 0 0 8px #00ff00;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* 图表容器 */
+        .chart-container {
+            background: linear-gradient(145deg, rgba(0,0,0,0.5), rgba(0,150,255,0.05));
+            border: 1px solid rgba(0, 150, 255, 0.3);
+            border-radius: 6px;
+            padding: 15px;
+            height: 200px;
+        }
+        
+        .chart-title {
+            color: #00D4FF;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .chart {
+            width: 100%;
+            height: 160px;
+        }
+        
+        /* 中央状态区域 */
+        .center-status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 120px;
+        }
+        
+        .status-big {
+            background: linear-gradient(145deg, rgba(0,0,0,0.6), rgba(0,150,255,0.1));
+            border: 2px solid rgba(0, 150, 255, 0.4);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .status-big h3 {
+            color: #00D4FF;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .status-big .value {
+            color: #fff;
+            font-size: 36px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .status-big .unit {
+            color: #aaa;
+            font-size: 14px;
+        }
+        
+        /* 底部图表区域 */
+        .bottom-charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        /* 表格样式 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 150, 255, 0.2);
+            color: #fff;
+            font-size: 12px;
+        }
+        
+        .data-table th {
+            color: #00D4FF;
+            font-weight: bold;
+        }
+        
+        /* 设备状态列表 */
+        .device-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .device-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(0, 150, 255, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid #00ff00;
+        }
+        
+        .device-name {
+            flex: 1;
+            color: #fff;
+            font-size: 12px;
+        }
+        
+        .device-value {
+            color: #00D4FF;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        /* 圆形图表容器 */
+        .circular-chart {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 1400px) {
+            .dashboard {
+                grid-template-columns: 250px 1fr 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 背景图片 -->
+        <div class="background-image"></div>
+        
+        <!-- 主面板 -->
+        <div class="dashboard">
+            <!-- 顶部标题栏 -->
+            <div class="header">
+                <h1>智能水利系统管理平台</h1>
+                <div class="header-right">
+                    <div class="time-display">{{ currentTime }}</div>
+                    <div style="color: #00ff00;">● 系统正常</div>
+                    <div id="ws-status" class="ws-status disconnected">🟡 连接中...</div>
+                </div>
+            </div>
+            
+            <!-- 左侧面板 -->
+            <div class="left-panel">
+                <div class="data-card">
+                    <h3><span class="status-indicator"></span>当日供水量</h3>
+                    <div class="data-value">{{ dailyWaterSupply }}</div>
+                    <div class="data-unit">万立方米</div>
+                </div>
+                
+                <div class="data-card">
+                    <h3><span class="status-indicator"></span>当日发电量</h3>
+                    <div class="data-value">{{ dailyPowerGen }}</div>
+                    <div class="data-unit">万千瓦时</div>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">当日供水趋势</div>
+                    <div id="waterSupplyChart" class="chart"></div>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">当日发电趋势</div>
+                    <div id="powerChart" class="chart"></div>
+                </div>
+            </div>
+            
+            <!-- 中央主区域 -->
+            <div class="main-area">
+                <!-- 主要状态显示 -->
+                <div class="center-status">
+                    <div class="status-big">
+                        <h3>当前水位</h3>
+                        <div class="value">{{ currentWaterLevel }}</div>
+                        <div class="unit">米</div>
+                    </div>
+                    <div class="status-big">
+                        <h3>当前流量</h3>
+                        <div class="value">{{ currentFlowRate }}</div>
+                        <div class="unit">立方米/秒</div>
+                    </div>
+                </div>
+                
+                <!-- 中央图表区域 -->
+                <div style="background: linear-gradient(145deg, rgba(0,0,0,0.5), rgba(0,150,255,0.05)); border: 1px solid rgba(0, 150, 255, 0.3); border-radius: 6px; padding: 15px;">
+                    <div class="chart-title">水位流量实时监测</div>
+                    <div id="mainChart" style="width: 100%; height: 300px;"></div>
+                </div>
+                
+                <!-- 底部图表 -->
+                <div class="bottom-charts">
+                    <div class="chart-container">
+                        <div class="chart-title">告警统计</div>
+                        <div id="alertChart" class="chart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">设备运行率</div>
+                        <div id="deviceChart" class="chart"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧面板 -->
+            <div class="right-panel">
+                <div class="data-card">
+                    <h3>泄洪流量</h3>
+                    <table class="data-table">
+                        <tr>
+                            <th>时间</th>
+                            <th>流量</th>
+                            <th>状态</th>
+                        </tr>
+                        <tr v-for="record in floodRecords" :key="record.time">
+                            <td>{{ record.time }}</td>
+                            <td>{{ record.flow }}</td>
+                            <td style="color: #00ff00;">{{ record.status }}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div class="data-card">
+                    <h3>水质状况</h3>
+                    <div class="device-list">
+                        <div v-for="quality in waterQuality" :key="quality.name" class="device-item">
+                            <div class="device-name">{{ quality.name }}</div>
+                            <div class="device-value">{{ quality.value }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="data-card">
+                    <h3>设备状态监控</h3>
+                    <div class="device-list">
+                        <div v-for="device in devices" :key="device.name" class="device-item" :style="{ borderLeftColor: device.status === '正常' ? '#00ff00' : '#ff0000' }">
+                            <div class="device-name">{{ device.name }}</div>
+                            <div class="device-value" :style="{ color: device.status === '正常' ? '#00ff00' : '#ff0000' }">{{ device.status }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            data() {
+                return {
+                    // --- 实时数据 ---
+                    currentTime: '',
+                    currentWaterLevel: '-',
+                    currentFlowRate: '-',
+                    
+                    // --- 统计数据 (暂时保留静态) ---
+                    dailyWaterSupply: '12.5',
+                    dailyPowerGen: '8.7',
+                    
+                    // --- 列表数据 ---
+                    floodRecords: [
+                        { time: '09:15', flow: '2390', status: '正常' },
+                        { time: '09:10', flow: '2340', status: '正常' },
+                        { time: '09:05', flow: '2360', status: '正常' },
+                        { time: '09:00', flow: '2320', status: '正常' }
+                    ],
+                    waterQuality: {
+                        'PH001': { name: 'pH值', value: '-', unit: '' },
+                        'DO001': { name: '溶解氧', value: '-', unit: 'mg/L' },
+                        'TUR001': { name: '浊度', value: '-', unit: 'NTU' },
+                        'AN001': { name: '氨氮', value: '-', unit: 'mg/L' },
+                        'COND001': { name: '电导率', value: '-', unit: 'μS/cm' },
+                    },
+                    devices: {
+                        'PUMP001': { name: '1号水泵', status: '未知', states: ["关闭", "运行", "故障"] },
+                        'PUMP002': { name: '2号水泵', status: '未知', states: ["关闭", "运行", "故障"] },
+                        'GATE001': { name: '泄洪闸01', status: '未知', states: ["关闭", "开启", "告警"] },
+                        'GATE002': { name: '泄洪闸02', status: '未知', states: ["关闭", "开启", "告警"] },
+                    },
+                    
+                    // --- WebSocket 实例 ---
+                    wsClient: null,
+                    wsStatus: { text: '未连接', className: 'disconnected' },
+                    
+                    // --- ECharts 实例 ---
+                    mainChart: null,
+                }
+            },
+            
+            mounted() {
+                // 路由保护
+                const token = localStorage.getItem('jwt_token');
+                if (!token) {
+                    alert("请先登录！");
+                    window.location.replace('login.html');
+                    return;
+                }
+
+                this.updateTime();
+                setInterval(this.updateTime, 1000);
+
+                this.initCharts();
+                this.connectWebSocket();
+            },
+            
+            methods: {
+                updateTime() {
+                    const now = new Date();
+                    this.currentTime = now.toLocaleString('zh-CN', { hour12: false });
+                },
+
+                connectWebSocket() {
+                    const wsUrl = 'ws://localhost:8081';
+                    this.wsClient = new WebSocketClient(wsUrl);
+
+                    this.wsClient.onOpen = () => {
+                        console.log('WebSocket connection established.');
+                        this.wsStatus = { text: '已连接', className: 'connected' };
+                    };
+
+                    this.wsClient.onClose = () => {
+                        console.warn('WebSocket connection closed.');
+                        this.wsStatus = { text: '已断开', className: 'disconnected' };
+                    };
+
+                    this.wsClient.onError = () => {
+                        console.error('WebSocket connection error.');
+                        this.wsStatus = { text: '连接错误', className: 'error' };
+                    };
+                    
+                    // **核心：数据分发中心**
+                    this.wsClient.onMessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            if (message.type === 'sensor_data') {
+                                this.dispatchSensorData(message.data);
+                            } else if (message.type === 'statistic_data') {
+                                this.dispatchStatisticData(message.data);
+                            }
+                        } catch (error) {
+                            console.error('Error parsing WebSocket message:', error);
+                        }
+                    };
+
+                    this.wsClient.connect();
+                },
+                
+                dispatchSensorData(data) {
+                    const sensorId = data.sensor_id;
+
+                    // 1. 更新顶部大卡片
+                    if (sensorId === 'WL001') {
+                        this.currentWaterLevel = data.value.toFixed(2);
+                    } else if (sensorId === 'FL001') {
+                        this.currentFlowRate = Math.round(data.value);
+                    }
+                    
+                    // 2. 更新水质状况列表
+                    if (this.waterQuality[sensorId]) {
+                        this.waterQuality[sensorId].value = data.value.toFixed(2);
+                    }
+                    
+                    // 3. 更新设备状态列表
+                    if (this.devices[sensorId]) {
+                        this.devices[sensorId].status = this.devices[sensorId].states[data.value];
+                    }
+                    
+                    // 4. 更新主图表
+                    if (sensorId === 'WL001' || sensorId === 'FL001') {
+                        this.updateMainChart(data);
+                    }
+                },
+
+                dispatchStatisticData(data) {
+                    this.dailyWaterSupply = data.daily_water_supply;
+                    this.dailyPowerGen = data.daily_power_generation;
+                },
+                
+                initCharts() {
+                    // --- 主图表初始化 ---
+                    this.mainChart = echarts.init(document.getElementById('mainChart'));
+                    const mainOption = {
+                        backgroundColor: 'transparent',
+                        tooltip: { trigger: 'axis' },
+                        legend: {
+                            data: ['水位', '流量'],
+                            textStyle: { color: '#fff' }
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: [],
+                            axisLine: { lineStyle: { color: '#0096ff' } },
+                            axisLabel: { color: '#fff' }
+                        },
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: '水位(m)',
+                                axisLine: { lineStyle: { color: '#0096ff' } },
+                                axisLabel: { color: '#fff' },
+                                nameTextStyle: { color: '#00D4FF' }
+                            },
+                            {
+                                type: 'value',
+                                name: '流量(m³/s)',
+                                axisLine: { lineStyle: { color: '#0096ff' } },
+                                axisLabel: { color: '#fff' },
+                                nameTextStyle: { color: '#00D4FF' }
+                            }
+                        ],
+                        series: [
+                            {
+                                name: '水位',
+                                type: 'line',
+                                data: [],
+                                lineStyle: { color: '#00D4FF', width: 3 },
+                                itemStyle: { color: '#00D4FF' },
+                                areaStyle: { color: 'rgba(0, 212, 255, 0.1)' }
+                            },
+                            {
+                                name: '流量',
+                                type: 'line',
+                                yAxisIndex: 1,
+                                data: [],
+                                lineStyle: { color: '#00ff88', width: 3 },
+                                itemStyle: { color: '#00ff88' }
+                            }
+                        ]
+                    };
+                    this.mainChart.setOption(mainOption);
+                    
+                    // 左侧小图表
+                    this.initSmallCharts();
+                    
+                    // 底部图表
+                    this.initBottomCharts();
+                },
+                
+                initSmallCharts() {
+                    // 供水趋势图
+                    const waterChart = echarts.init(document.getElementById('waterSupplyChart'));
+                    const waterOption = {
+                        backgroundColor: 'transparent',
+                        xAxis: {
+                            type: 'category',
+                            data: ['6h', '12h', '18h', '24h'],
+                            axisLine: { show: false },
+                            axisLabel: { color: '#fff', fontSize: 10 }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            axisLine: { show: false },
+                            axisLabel: { show: false },
+                            splitLine: { show: false }
+                        },
+                        series: [{
+                            data: [8.2, 9.5, 11.2, 12.5],
+                            type: 'line',
+                            smooth: true,
+                            lineStyle: { color: '#00D4FF', width: 2 },
+                            itemStyle: { color: '#00D4FF' },
+                            areaStyle: { color: 'rgba(0, 212, 255, 0.3)' }
+                        }]
+                    };
+                    waterChart.setOption(waterOption);
+                    
+                    // 发电趋势图
+                    const powerChart = echarts.init(document.getElementById('powerChart'));
+                    const powerOption = {
+                        backgroundColor: 'transparent',
+                        xAxis: {
+                            type: 'category',
+                            data: ['6h', '12h', '18h', '24h'],
+                            axisLine: { show: false },
+                            axisLabel: { color: '#fff', fontSize: 10 }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            axisLine: { show: false },
+                            axisLabel: { show: false },
+                            splitLine: { show: false }
+                        },
+                        series: [{
+                            data: [5.8, 6.9, 7.8, 8.7],
+                            type: 'bar',
+                            itemStyle: { color: '#ff6600' },
+                            barWidth: '60%'
+                        }]
+                    };
+                    powerChart.setOption(powerOption);
+                },
+                
+                initBottomCharts() {
+                    // 告警统计
+                    const alertChart = echarts.init(document.getElementById('alertChart'));
+                    const alertOption = {
+                        backgroundColor: 'transparent',
+                        tooltip: { trigger: 'item' },
+                        series: [{
+                            type: 'pie',
+                            radius: ['40%', '70%'],
+                            data: [
+                                { value: 85, name: '正常', itemStyle: { color: '#00ff00' } },
+                                { value: 10, name: '警告', itemStyle: { color: '#ff6600' } },
+                                { value: 5, name: '故障', itemStyle: { color: '#ff0000' } }
+                            ],
+                            label: { color: '#fff', fontSize: 12 }
+                        }]
+                    };
+                    alertChart.setOption(alertOption);
+                    
+                    // 设备运行率
+                    const deviceChart = echarts.init(document.getElementById('deviceChart'));
+                    const deviceOption = {
+                        backgroundColor: 'transparent',
+                        tooltip: { trigger: 'axis' },
+                        xAxis: {
+                            type: 'category',
+                            data: ['水泵', '闸门', '监测', '控制'],
+                            axisLine: { lineStyle: { color: '#0096ff' } },
+                            axisLabel: { color: '#fff', fontSize: 10 }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            max: 100,
+                            axisLine: { show: false },
+                            axisLabel: { color: '#fff', fontSize: 10 },
+                            splitLine: { lineStyle: { color: 'rgba(0, 150, 255, 0.2)' } }
+                        },
+                        series: [{
+                            data: [95, 100, 98, 92],
+                            type: 'bar',
+                            itemStyle: { color: '#00ff88' },
+                            barWidth: '50%'
+                        }]
+                    };
+                    deviceChart.setOption(deviceOption);
+                },
+                
+                updateMainChart(data) {
+                    const option = this.mainChart.getOption();
+                    const time = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    
+                    // 添加新数据点
+                    option.xAxis[0].data.push(time);
+                    
+                    if (data.sensor_id === 'WL001') {
+                        option.series[0].data.push(data.value);
+                        option.series[1].data.push(null); // 补空值
+                    } else if (data.sensor_id === 'FL001') {
+                        option.series[1].data.push(data.value);
+                        option.series[0].data.push(null); // 补空值
+                    }
+
+                    // 保持图表滚动
+                    if (option.xAxis[0].data.length > 30) {
+                        option.xAxis[0].data.shift();
+                        option.series[0].data.shift();
+                        option.series[1].data.shift();
+                    }
+                    
+                    this.mainChart.setOption(option);
+                },
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

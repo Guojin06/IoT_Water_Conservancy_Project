@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统管理 - 智能水利物联网系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="js/websocket-client.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #0a192f;
+            color: #ccd6f6;
+            margin: 0;
+            padding: 20px;
+        }
+        #app {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #1e2d4d;
+        }
+        header h1 {
+            font-size: 2em;
+            color: #64ffda;
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.7);
+        }
+        .ws-status {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .ws-status.connected { background-color: rgba(100, 255, 218, 0.2); color: #64ffda; }
+        .ws-status.disconnected { background-color: rgba(255, 204, 0, 0.2); color: #ffcc00; }
+        .ws-status.error { background-color: rgba(255, 100, 100, 0.2); color: #ff6464; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: rgba(10, 25, 47, 0.85);
+        }
+        th, td {
+            border: 1px solid #1e2d4d;
+            padding: 12px 15px;
+            text-align: left;
+        }
+        thead {
+            background-color: #112240;
+        }
+        th {
+            color: #64ffda;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #112240;
+        }
+        tbody tr:hover {
+            background-color: #1e2d4d;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            color: #fff;
+        }
+        .status-normal { background-color: #28a745; }
+        .status-warn { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>传感器管理中心</h1>
+            <div :class="['ws-status', wsStatus.className]">{{ wsStatus.text }}</div>
+        </header>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>传感器ID</th>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>位置</th>
+                    <th>最新数值</th>
+                    <th>最后更新时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="sensor in sensors" :key="sensor.sensor_id">
+                    <td>{{ sensor.sensor_id }}</td>
+                    <td>{{ sensor.name }}</td>
+                    <td>{{ sensor.sensor_type }}</td>
+                    <td>{{ sensor.location }}</td>
+                    <td>{{ sensor.current_value || '等待数据...' }}</td>
+                    <td>{{ sensor.last_updated || 'N/A' }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const sensors = ref({});
+                const wsStatus = ref({ text: '未连接', className: 'disconnected' });
+                const wsClient = ref(null);
+
+                const fetchSensors = async () => {
+                    const token = localStorage.getItem('jwt_token');
+                    if (!token) {
+                        alert("认证失败，请重新登录！");
+                        window.location.replace('login.html');
+                        return;
+                    }
+                    try {
+                        const response = await fetch('/api/sensors/all', {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (!response.ok) throw new Error('获取传感器列表失败');
+                        
+                        const data = await response.json();
+                        // 将数组转换为以sensor_id为键的对象，方便快速更新
+                        sensors.value = data.reduce((acc, sensor) => {
+                            acc[sensor.sensor_id] = sensor;
+                            return acc;
+                        }, {});
+
+                    } catch (error) {
+                        console.error(error);
+                    }
+                };
+
+                const connectWebSocket = () => {
+                    const wsUrl = 'ws://localhost:8081';
+                    wsClient.value = new WebSocketClient(wsUrl);
+                    wsClient.value.onOpen = () => wsStatus.value = { text: '已连接', className: 'connected' };
+                    wsClient.value.onClose = () => wsStatus.value = { text: '已断开', className: 'disconnected' };
+                    wsClient.value.onError = () => wsStatus.value = { text: '连接错误', className: 'error' };
+                    wsClient.value.onMessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            if (message.type === 'sensor_data') {
+                                const data = message;
+                                const sensorId = data.sensor_id;
+
+                                if (sensors.value[sensorId]) {
+                                    const sensorRef = sensors.value[sensorId];
+                                    
+                                    let displayValue = data.value;
+                                    const sensorInfo = sensors.value[sensorId];
+
+                                    // 从API获取到的静态信息中读取states数组
+                                    if(data.sensor_type === 'device_status' && sensorInfo && Array.isArray(sensorInfo.states)) {
+                                        displayValue = sensorInfo.states[data.value];
+                                    }
+
+                                    sensorRef.current_value = `${displayValue} ${data.unit || ''}`.trim();
+                                    sensorRef.last_updated = new Date(data.timestamp).toLocaleTimeString();
+                                }
+                            }
+                        } catch (error) {
+                            console.error('解析WebSocket消息失败:', error);
+                        }
+                    };
+                    wsClient.value.connect();
+                };
+
+                onMounted(() => {
+                    fetchSensors();
+                    connectWebSocket();
+                });
+
+                return { sensors, wsStatus };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

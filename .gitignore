@@ -1,0 +1,17 @@
+# Python virtual environment
+/ai_env/
+/websocket_env/
+__pycache__/
+*.pyc
+
+# VSCode settings
+.vscode/
+
+# Build artifacts
+build/
+dist/
+*.o
+*.so
+
+# Other
+image.png

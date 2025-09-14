@@ -2,6 +2,7 @@ import redis
 import json
 import logging
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -93,6 +94,22 @@ class RedisClient:
         except redis.exceptions.RedisError as e:
             logger.error(f"从Redis获取数据时出错 for {sensor_id}: {e}")
             return None
+
+    def publish_statistic_data(self, data: Dict[str, Any]):
+        """
+        将统计数据发布到指定的频道。
+        """
+        channel = "statistics:updates"
+        message = json.dumps({
+            "type": "statistic_data",
+            "timestamp": datetime.now().isoformat(),
+            "data": data
+        })
+        try:
+            self.client.publish(channel, message)
+            # logger.info(f"Published to {channel}: {message}")
+        except Exception as e:
+            logger.error(f"发布统计数据到 Redis 频道 {channel} 失败: {e}")
 
 def test_redis_connection():
     """一个简单的测试函数"""

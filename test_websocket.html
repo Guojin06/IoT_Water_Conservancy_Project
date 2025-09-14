@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket功能测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f8ff; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; font-weight: bold; }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .sensor { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .value { font-size: 24px; font-weight: bold; color: #007bff; }
+        .log { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 WebSocket实时通信测试</h1>
+        
+        <div id="status" class="status disconnected">
+            🔴 未连接
+        </div>
+        
+        <div id="sensors"></div>
+        
+        <h3>📝 实时日志</h3>
+        <div id="log" class="log"></div>
+        
+        <button onclick="reconnect()">🔄 重新连接</button>
+        <button onclick="clearLog()">🧹 清除日志</button>
+    </div>
+
+    <script>
+        let ws = null;
+        const sensors = {};
+        
+        function log(message) {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${time}] ${message}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function updateStatus(status, message) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = message;
+        }
+        
+        function updateSensor(data) {
+            const sensorsEl = document.getElementById('sensors');
+            
+            if (!sensors[data.sensor_id]) {
+                const sensorEl = document.createElement('div');
+                sensorEl.className = 'sensor';
+                sensorEl.id = data.sensor_id;
+                sensorEl.innerHTML = `
+                    <h4>${data.sensor_name}</h4>
+                    <div class="value" id="${data.sensor_id}-value">--</div>
+                    <div id="${data.sensor_id}-time">等待数据...</div>
+                `;
+                sensorsEl.appendChild(sensorEl);
+                sensors[data.sensor_id] = true;
+            }
+            
+            document.getElementById(`${data.sensor_id}-value`).textContent = 
+                `${data.value} ${data.unit}`;
+            document.getElementById(`${data.sensor_id}-time`).textContent = 
+                new Date(data.timestamp).toLocaleTimeString();
+        }
+        
+        function connect() {
+            try {
+                ws = new WebSocket('ws://localhost:8081');
+                
+                ws.onopen = function() {
+                    log('✅ WebSocket连接成功');
+                    updateStatus('connected', '🟢 已连接');
+                };
+                
+                ws.onmessage = function(event) {
+                    const message = JSON.parse(event.data);
+                    
+                    switch(message.type) {
+                        case 'welcome':
+                            log(`👋 ${message.message}`);
+                            break;
+                        case 'sensor_data':
+                            updateSensor(message.data);
+                            log(`📊 ${message.data.sensor_name}: ${message.data.value}${message.data.unit}`);
+                            break;
+                        default:
+                            log(`❓ 未知消息类型: ${message.type}`);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    log('❌ WebSocket连接关闭');
+                    updateStatus('disconnected', '🔴 已断开');
+                };
+                
+                ws.onerror = function(error) {
+                    log('❌ WebSocket错误: ' + error);
+                    updateStatus('disconnected', '🔴 连接错误');
+                };
+                
+            } catch (error) {
+                log('❌ 连接失败: ' + error);
+                updateStatus('disconnected', '🔴 连接失败');
+            }
+        }
+        
+        function reconnect() {
+            if (ws) ws.close();
+            connect();
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // 页面加载后自动连接
+        window.onload = function() {
+            log('🚀 页面加载完成，正在连接WebSocket...');
+            connect();
+        };
+    </script>
+</body>
+</html>
+

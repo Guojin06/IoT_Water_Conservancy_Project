@@ -1,0 +1,157 @@
+{
+  "system": {
+    "name": "WaterConservancyIoT",
+    "version": "1.0.0",
+    "environment": "development",
+    "debug": true,
+    "log_level": "DEBUG"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "threads": 4,
+    "max_connections": 1000,
+    "timeout_seconds": 30,
+    "enable_cors": true,
+    "static_files_path": "./frontend/dist"
+  },
+  "websocket": {
+    "enabled": true,
+    "port": 8081,
+    "ping_interval_seconds": 30,
+    "max_clients": 100
+  },
+  "database": {
+    "redis": {
+      "host": "127.0.0.1",
+      "port": 6379,
+      "password": "",
+      "database": 0,
+      "connection_pool_size": 10,
+      "timeout_seconds": 5,
+      "retry_attempts": 3
+    }
+  },
+  "data_processor": {
+    "collection_interval_ms": 1000,
+    "batch_size": 100,
+    "worker_threads": 2,
+    "queue_max_size": 10000,
+    "data_retention_days": 30
+  },
+  "sensors": {
+    "simulation_enabled": true,
+    "auto_start": true,
+    "instances": [
+      {
+        "id": "WL_001",
+        "type": "WATER_LEVEL",
+        "location": "主水库-东侧",
+        "enabled": true,
+        "config": {
+          "base_level": 15.5,
+          "low_alarm": 12.0,
+          "high_alarm": 18.0,
+          "wave_amplitude": 0.1,
+          "noise_level": 0.02
+        }
+      },
+      {
+        "id": "WQ_001", 
+        "type": "WATER_QUALITY",
+        "location": "主水库-取水口",
+        "enabled": true,
+        "config": {
+          "ph_range": [6.5, 8.5],
+          "turbidity_max": 10.0,
+          "dissolved_oxygen_min": 5.0
+        }
+      },
+      {
+        "id": "RF_001",
+        "type": "RAINFALL",
+        "location": "气象站-主站",
+        "enabled": true,
+        "config": {
+          "intensity_max": 50.0,
+          "event_probability": 0.1
+        }
+      },
+      {
+        "id": "GS_001",
+        "type": "GATE_STATUS", 
+        "location": "主坝-泄洪闸",
+        "enabled": true,
+        "config": {
+          "opening_range": [0, 100],
+          "operation_speed": 5.0
+        }
+      }
+    ]
+  },
+  "alerts": {
+    "enabled": true,
+    "check_interval_seconds": 5,
+    "notification_cooldown_minutes": 15,
+    "severity_levels": {
+      "INFO": 1,
+      "WARNING": 2, 
+      "CRITICAL": 3,
+      "EMERGENCY": 4
+    },
+    "rules": [
+      {
+        "name": "高水位预警",
+        "sensor_type": "WATER_LEVEL",
+        "condition": "value > 17.5",
+        "severity": "WARNING",
+        "message": "水位接近警戒线"
+      },
+      {
+        "name": "洪水预警",
+        "sensor_type": "WATER_LEVEL", 
+        "condition": "value > 18.0",
+        "severity": "CRITICAL",
+        "message": "水位超过警戒线，可能发生洪水"
+      },
+      {
+        "name": "水质异常",
+        "sensor_type": "WATER_QUALITY",
+        "condition": "ph < 6.0 OR ph > 9.0",
+        "severity": "WARNING", 
+        "message": "水质pH值异常"
+      }
+    ]
+  },
+  "api": {
+    "rate_limiting": {
+      "enabled": true,
+      "requests_per_minute": 1000,
+      "burst_limit": 100
+    },
+    "authentication": {
+      "enabled": false,
+      "jwt_secret": "dev_secret_key_change_in_production",
+      "token_expiry_hours": 24
+    },
+    "endpoints": {
+      "sensors": "/api/v1/sensors",
+      "data": "/api/v1/data", 
+      "alerts": "/api/v1/alerts",
+      "control": "/api/v1/control",
+      "status": "/api/v1/status"
+    }
+  },
+  "logging": {
+    "level": "DEBUG",
+    "console": true,
+    "file": {
+      "enabled": true,
+      "path": "./logs/water_iot.log",
+      "max_size_mb": 100,
+      "max_files": 10,
+      "rotate_daily": true
+    },
+    "format": "[%Y-%m-%d %H:%M:%S] [%level%] %message%"
+  }
+}

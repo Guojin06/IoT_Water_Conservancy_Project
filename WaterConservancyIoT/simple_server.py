@@ -103,6 +103,22 @@ class WaterIoTHandler(http.server.SimpleHTTPRequestHandler):
                 # 此处仅为演示，返回一个成功信息
                 self.send_json_response({"message": "Access granted to protected sensor data!"})
 
+            elif parsed_path.path == '/api/sensors/all':
+                token_payload = self.verify_jwt()
+                if not token_payload:
+                    self.send_error(401, "Authentication required")
+                    return
+                
+                try:
+                    sensors = mysql_cli.get_all_sensors()
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(sensors).encode('utf-8'))
+                except Exception as e:
+                    logger.error(f"获取所有传感器时出错: {e}")
+                    self.send_error(500, "Internal server error")
+
             # ... (其他API路由)
 
             else:

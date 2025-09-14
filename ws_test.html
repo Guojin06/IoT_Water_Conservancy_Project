@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket功能演示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #00d4ff;
+            margin-bottom: 30px;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .connected {
+            background: rgba(0, 255, 0, 0.3);
+            border: 2px solid #00ff00;
+            color: #00ff00;
+        }
+        
+        .disconnected {
+            background: rgba(255, 0, 0, 0.3);
+            border: 2px solid #ff0000;
+            color: #ff0000;
+        }
+        
+        .connecting {
+            background: rgba(255, 255, 0, 0.3);
+            border: 2px solid #ffff00;
+            color: #ffff00;
+        }
+        
+        .messages {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 8px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .welcome { border-left: 4px solid #00ff00; }
+        .data { border-left: 4px solid #00d4ff; }
+        .error { border-left: 4px solid #ff0000; }
+        
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        button {
+            background: rgba(0, 212, 255, 0.3);
+            color: #00d4ff;
+            border: 2px solid #00d4ff;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 0 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            background: rgba(0, 212, 255, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .explanation {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .explanation h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 WebSocket实时通信演示</h1>
+        
+        <div class="explanation">
+            <h3>🎯 WebSocket的作用：</h3>
+            <p>• <strong>实时数据推送</strong>：服务器主动发送数据，无需客户端请求</p>
+            <p>• <strong>低延迟通信</strong>：毫秒级响应，比HTTP轮询快300倍</p>
+            <p>• <strong>节省资源</strong>：减少90%的服务器负载和带宽使用</p>
+            <p>• <strong>双向通信</strong>：客户端和服务器都能主动发送消息</p>
+        </div>
+        
+        <div class="explanation">
+            <h3>🏗️ 在IoT水利项目中的价值：</h3>
+            <p>• <strong>紧急告警</strong>：水位超标立即通知，不用等用户刷新页面</p>
+            <p>• <strong>实时监控</strong>：传感器数据变化实时展示，及时发现异常</p>
+            <p>• <strong>流量跟踪</strong>：水流变化实时监控，防止溢出断流</p>
+            <p>• <strong>设备状态</strong>：传感器在线离线状态实时更新</p>
+        </div>
+        
+        <div id="status" class="status connecting">
+            🟡 正在连接WebSocket服务器...
+        </div>
+        
+        <div class="messages" id="messages">
+            <div class="message">📝 等待WebSocket连接...</div>
+        </div>
+        
+        <div class="controls">
+            <button onclick="reconnect()">🔄 重新连接</button>
+            <button onclick="clearMessages()">🧹 清除消息</button>
+            <button onclick="sendTest()">📤 发送测试消息</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+        
+        function updateStatus(status, message) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = message;
+        }
+        
+        function addMessage(content, type = 'data') {
+            const messagesEl = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            messageEl.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${content}`;
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            
+            // 限制消息数量
+            if (messagesEl.children.length > 50) {
+                messagesEl.removeChild(messagesEl.firstChild);
+            }
+        }
+        
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket('ws://localhost:8081');
+                
+                ws.onopen = function(event) {
+                    updateStatus('connected', '🟢 WebSocket连接成功');
+                    addMessage('✅ WebSocket连接成功！', 'welcome');
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        messageCount++;
+                        
+                        if (data.type === 'welcome') {
+                            addMessage(`👋 ${data.message} (${data.time})`, 'welcome');
+                        } else if (data.type === 'test_data') {
+                            addMessage(`📊 ${data.message} - 时间: ${data.time}`, 'data');
+                        } else {
+                            addMessage(`📨 收到消息: ${JSON.stringify(data)}`, 'data');
+                        }
+                        
+                        // 更新连接状态显示消息计数
+                        updateStatus('connected', `🟢 已连接 - 收到 ${messageCount} 条消息`);
+                        
+                    } catch (error) {
+                        addMessage(`❌ 消息解析失败: ${error.message}`, 'error');
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    updateStatus('disconnected', '🔴 WebSocket连接已断开');
+                    addMessage(`❌ 连接关闭: 代码=${event.code}, 原因=${event.reason || '未知'}`, 'error');
+                };
+                
+                ws.onerror = function(error) {
+                    updateStatus('disconnected', '🔴 WebSocket连接错误');
+                    addMessage(`❌ 连接错误: ${error}`, 'error');
+                };
+                
+            } catch (error) {
+                updateStatus('disconnected', '🔴 WebSocket连接失败');
+                addMessage(`❌ 连接失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function reconnect() {
+            if (ws) {
+                ws.close();
+            }
+            messageCount = 0;
+            updateStatus('connecting', '🟡 正在重新连接...');
+            addMessage('🔄 尝试重新连接...', 'welcome');
+            setTimeout(connectWebSocket, 1000);
+        }
+        
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            addMessage('🧹 消息已清除', 'welcome');
+        }
+        
+        function sendTest() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const testMsg = {
+                    type: 'client_test',
+                    message: '客户端测试消息',
+                    timestamp: new Date().toISOString()
+                };
+                ws.send(JSON.stringify(testMsg));
+                addMessage('📤 发送测试消息到服务器', 'welcome');
+            } else {
+                addMessage('⚠️ WebSocket未连接，无法发送消息', 'error');
+            }
+        }
+        
+        // 页面加载完成后自动连接
+        window.addEventListener('load', function() {
+            addMessage('🚀 页面加载完成，正在连接WebSocket服务器...', 'welcome');
+            connectWebSocket();
+        });
+    </script>
+</body>
+</html>
+

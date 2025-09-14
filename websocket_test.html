@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .log { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔌 WebSocket连接测试</h1>
+    
+    <div id="status" class="status connecting">🟡 连接中...</div>
+    
+    <div>
+        <button onclick="connect()">连接</button>
+        <button onclick="disconnect()">断开</button>
+        <button onclick="clearLog()">清空日志</button>
+    </div>
+    
+    <h3>连接日志：</h3>
+    <div id="log" class="log"></div>
+    
+    <h3>接收到的数据：</h3>
+    <div id="data" class="log"></div>
+
+    <script>
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${status}`;
+            statusDiv.innerHTML = message;
+        }
+        
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('⚠️ 已经连接，无需重复连接');
+                return;
+            }
+            
+            const wsUrl = 'ws://localhost:8081';
+            log(`🔌 尝试连接: ${wsUrl}`);
+            updateStatus('connecting', '🟡 连接中...');
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function(event) {
+                    log('✅ WebSocket连接成功！');
+                    updateStatus('connected', '🟢 已连接');
+                    reconnectAttempts = 0;
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📨 收到消息: ${data.type}`);
+                        
+                        const dataDiv = document.getElementById('data');
+                        dataDiv.innerHTML += `<div><strong>${data.type}:</strong> ${JSON.stringify(data, null, 2)}</div>\n`;
+                        dataDiv.scrollTop = dataDiv.scrollHeight;
+                    } catch (e) {
+                        log(`❌ 解析消息失败: ${event.data}`);
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    log(`❌ 连接关闭: Code=${event.code}, Reason=${event.reason}`);
+                    updateStatus('disconnected', '🔴 已断开');
+                    
+                    // 自动重连
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        log(`🔄 ${3}秒后尝试第${reconnectAttempts}次重连...`);
+                        setTimeout(connect, 3000);
+                    } else {
+                        log('❌ 重连次数已达上限，停止重连');
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    log(`❌ WebSocket错误: ${error}`);
+                    updateStatus('disconnected', '🔴 连接错误');
+                };
+                
+            } catch (error) {
+                log(`❌ 连接异常: ${error.message}`);
+                updateStatus('disconnected', '🔴 连接失败');
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                log('🔌 手动断开连接');
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('data').innerHTML = '';
+        }
+        
+        // 页面加载后自动连接
+        window.onload = function() {
+            log('📄 页面加载完成，开始连接测试...');
+            connect();
+        };
+    </script>
+</body>
+</html>

@@ -107,3 +107,72 @@ CREATE TABLE IF NOT EXISTS users (
 - `password_hash`: 用于存储**加盐哈希**后的密码。**严禁存储明文密码**。长度设为255以兼容未来的哈希算法。
 - `role`: 用户角色，例如 `admin` (管理员), `viewer` (观察员)。默认为 `viewer`，为将来的权限分级做准备。
 - `created_at`: 记录用户创建时间。
+
+## 5. 每日统计表 (`daily_statistics`)
+
+为了支持发电量等统计数据的合理存储，我们需要一个表来存储每日的累计供水量和发电量等统计信息。
+
+### 5.1 `daily_statistics` 表
+用于存储每日的统计数据。
+
+```sql
+ALTER TABLE `users` ADD UNIQUE (`username`);
+
+-- ----------------------------
+-- Table structure for daily_statistics
+-- ----------------------------
+DROP TABLE IF EXISTS `daily_statistics`;
+CREATE TABLE `daily_statistics` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `record_date` date NOT NULL,
+  `total_water_supply` decimal(10,2) DEFAULT '0.00',
+  `total_power_generation` decimal(10,2) DEFAULT '0.00',
+  `peak_flow_rate` decimal(10,2) DEFAULT NULL,
+  `average_water_level` decimal(10,2) DEFAULT NULL,
+  `last_updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `record_date` (`record_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='每日统计数据表';
+```
+
+## 3. 表关系 E-R 图 (Mermaid 语法)
+
+```mermaid
+erDiagram
+    USERS {
+        int id PK
+        varchar(50) username
+        varchar(255) password_hash
+        varchar(20) role
+        timestamp created_at
+    }
+
+    SENSORS {
+        varchar(50) sensor_id PK
+        varchar(50) sensor_type
+        varchar(100) location
+        varchar(255) description
+        varchar(50) name "传感器名称"
+        varchar(20) unit "单位"
+        timestamp last_updated "最后更新时间"
+        varchar(255) current_value "最新数值"
+    }
+
+    SENSOR_READINGS {
+        bigint id PK
+        varchar(50) sensor_id FK
+        timestamp reading_time
+        varchar(255) value
+        timestamp created_at
+    }
+
+    DAILY_STATISTICS {
+        int id PK
+        date record_date
+        decimal total_water_supply
+        decimal total_power_generation
+        timestamp last_updated
+    }
+
+    SENSOR_READINGS ||--o{ SENSORS : "belongs to"
+```
