@@ -147,6 +147,26 @@ class MySQLClient:
             logger.error(f"查询所有传感器失败: {e}")
             return []
 
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """根据用户名查询用户信息"""
+        query = "SELECT id, username, password_hash, role FROM users WHERE username = %s"
+        cursor = None
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute(query, (username,))
+            return cursor.fetchone()
+        except Error as e:
+            logger.error(f"查询用户 '{username}' 失败: {e}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+
+    def create_user(self, username: str, password_hash: str, role: str) -> bool:
+        """创建一个新用户"""
+        query = "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)"
+        return self.execute_query(query, (username, password_hash, role))
+
     def close(self):
         """关闭数据库连接。"""
         if self.is_connected():

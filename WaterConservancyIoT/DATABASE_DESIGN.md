@@ -153,9 +153,7 @@ erDiagram
         varchar(100) location
         varchar(255) description
         varchar(50) name "传感器名称"
-        varchar(20) unit "单位"
-        timestamp last_updated "最后更新时间"
-        varchar(255) current_value "最新数值"
+        json states "设备状态文字描述"
     }
 
     SENSOR_READINGS {
@@ -174,5 +172,6 @@ erDiagram
         timestamp last_updated
     }
 
-    SENSOR_READINGS ||--o{ SENSORS : "belongs to"
+    SENSORS ||--|{ SENSOR_READINGS : "generates"
+    USERS ||--|{ SENSORS : "manages (conceptual)"
 ```
