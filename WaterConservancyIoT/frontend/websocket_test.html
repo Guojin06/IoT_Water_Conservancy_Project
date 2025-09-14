@@ -1,0 +1,207 @@
+<!-- 移动到frontend目录 -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .status { padding: 15px; margin: 10px 0; border-radius: 8px; font-weight: bold; text-align: center; }
+        .connecting { background-color: #fff3cd; color: #856404; border: 2px solid #ffeaa7; }
+        .connected { background-color: #d4edda; color: #155724; border: 2px solid #00b894; }
+        .disconnected { background-color: #f8d7da; color: #721c24; border: 2px solid #e17055; }
+        .controls { text-align: center; margin: 20px 0; }
+        button { padding: 12px 24px; margin: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .btn-connect { background-color: #00b894; color: white; }
+        .btn-disconnect { background-color: #e17055; color: white; }
+        .btn-clear { background-color: #6c5ce7; color: white; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+        .log-section { margin: 20px 0; }
+        .log { background-color: #2d3436; color: #00ff00; border: 2px solid #636e72; padding: 15px; height: 250px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px; border-radius: 8px; }
+        .data-display { background-color: #f8f9fa; border: 2px solid #dee2e6; padding: 15px; height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; border-radius: 8px; }
+        h1 { text-align: center; color: #2d3436; margin-bottom: 30px; }
+        h3 { color: #636e72; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
+        .info-box { background-color: #e8f4fd; border-left: 4px solid #0984e3; padding: 15px; margin: 15px 0; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket连接测试工具</h1>
+        
+        <div class="info-box">
+            <strong>测试目标:</strong> ws://localhost:8081<br>
+            <strong>当前时间:</strong> <span id="currentTime"></span>
+        </div>
+        
+        <div id="status" class="status connecting">🟡 准备连接...</div>
+        
+        <div class="controls">
+            <button class="btn-connect" onclick="connect()">🔌 连接</button>
+            <button class="btn-disconnect" onclick="disconnect()">❌ 断开</button>
+            <button class="btn-clear" onclick="clearLog()">🧹 清空日志</button>
+        </div>
+        
+        <div class="log-section">
+            <h3>📋 连接日志</h3>
+            <div id="log" class="log">等待开始测试...\n</div>
+        </div>
+        
+        <div class="log-section">
+            <h3>📨 实时数据</h3>
+            <div id="data" class="data-display">等待接收数据...\n</div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 3;
+        let heartbeatInterval = null;
+        
+        // 更新时间显示
+        function updateTime() {
+            document.getElementById('currentTime').textContent = new Date().toLocaleString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        
+        function log(message, isError = false) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = isError ? '#ff6b6b' : '#00ff00';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${status}`;
+            statusDiv.innerHTML = message;
+        }
+        
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('⚠️ WebSocket已经连接，无需重复连接', true);
+                return;
+            }
+            
+            const wsUrl = 'ws://localhost:8081';
+            log(`🚀 开始连接 WebSocket 服务器: ${wsUrl}`);
+            updateStatus('connecting', '🟡 连接中...');
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function(event) {
+                    log('✅ WebSocket连接建立成功！');
+                    updateStatus('connected', '🟢 连接成功 - 实时通信已启用');
+                    reconnectAttempts = 0;
+                    startHeartbeat();
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📨 收到 ${data.type} 类型消息`);
+                        
+                        const dataDiv = document.getElementById('data');
+                        const timestamp = new Date().toLocaleTimeString();
+                        
+                        if (data.type === 'sensor_data') {
+                            dataDiv.innerHTML += `<div style="color: #0984e3; margin: 5px 0;"><strong>[${timestamp}] 传感器数据:</strong></div>`;
+                            data.sensors.forEach(sensor => {
+                                dataDiv.innerHTML += `  📊 ${sensor.id}: ${sensor.value}${sensor.unit} (${sensor.status})\n`;
+                            });
+                        } else if (data.type === 'alert') {
+                            dataDiv.innerHTML += `<div style="color: #e17055; margin: 5px 0;"><strong>[${timestamp}] ⚠️ 告警:</strong> ${data.message}</div>`;
+                        } else {
+                            dataDiv.innerHTML += `<div style="color: #6c5ce7; margin: 5px 0;"><strong>[${timestamp}] ${data.type}:</strong> ${JSON.stringify(data, null, 2)}</div>`;
+                        }
+                        
+                        dataDiv.scrollTop = dataDiv.scrollHeight;
+                    } catch (e) {
+                        log(`❌ 解析消息失败: ${e.message}`, true);
+                        log(`原始数据: ${event.data}`, true);
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    log(`❌ WebSocket连接关闭 - Code: ${event.code}, Reason: ${event.reason || '未知原因'}`, true);
+                    updateStatus('disconnected', '🔴 连接已断开');
+                    stopHeartbeat();
+                    
+                    if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        log(`🔄 3秒后尝试第 ${reconnectAttempts} 次重连...`);
+                        setTimeout(connect, 3000);
+                    } else if (reconnectAttempts >= maxReconnectAttempts) {
+                        log('❌ 已达到最大重连次数，停止重连', true);
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    log(`❌ WebSocket发生错误: ${error.message || '连接失败'}`, true);
+                    updateStatus('disconnected', '🔴 连接错误');
+                };
+                
+            } catch (error) {
+                log(`❌ 创建WebSocket连接时发生异常: ${error.message}`, true);
+                updateStatus('disconnected', '🔴 连接失败');
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close(1000, '用户手动断开');
+                log('🔌 用户主动断开连接');
+                stopHeartbeat();
+            } else {
+                log('⚠️ 没有活跃的连接可以断开', true);
+            }
+        }
+        
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+                    log('💓 发送心跳包');
+                }
+            }, 30000); // 每30秒发送一次心跳
+        }
+        
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '日志已清空...\n';
+            document.getElementById('data').innerHTML = '数据显示区域已清空...\n';
+            log('🧹 日志和数据显示已清空');
+        }
+        
+        // 页面加载完成后自动开始测试
+        window.onload = function() {
+            log('📄 WebSocket测试页面加载完成');
+            log('🎯 准备测试与 ws://localhost:8081 的连接');
+            
+            // 2秒后自动开始连接测试
+            setTimeout(() => {
+                log('🚀 开始自动连接测试...');
+                connect();
+            }, 2000);
+        };
+        
+        // 页面关闭时清理连接
+        window.onbeforeunload = function() {
+            if (ws) {
+                ws.close();
+            }
+            stopHeartbeat();
+        };
+    </script>
+</body>
+</html>
