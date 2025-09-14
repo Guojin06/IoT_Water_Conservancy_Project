@@ -222,15 +222,17 @@ class DataProducer:
                 # value 统一转为字符串以便存入 VARCHAR 列
                 data_for_mysql['value'] = str(data_for_mysql['value'])
                 self.mysql_client.insert_sensor_reading(data_for_mysql)
-
-                value_display = data['value']
-                if isinstance(value_display, int) and 'states' in self.sensors[sensor_id_to_update]:
-                     value_display = self.sensors[sensor_id_to_update]['states'][value_display]
-
-                logger.info(f"更新 {sensor_id_to_update} ({data['name']}): value={value_display}")
-                
-                # --- 定时更新统计数据 ---
-                current_time = time.time()
+ 
+                 # 修正: 从 self.sensors 中获取传感器名称用于日志记录
+                 sensor_name = self.sensors[sensor_id_to_update].get('name', sensor_id_to_update)
+                 value_display = data['value']
+                 if isinstance(value_display, int) and 'states' in self.sensors[sensor_id_to_update]:
+                      value_display = self.sensors[sensor_id_to_update]['states'][value_display]
+ 
+                 logger.info(f"更新 {sensor_id_to_update} ({sensor_name}): value={value_display}")
+                 
+                 # --- 定时更新统计数据 ---
+                 current_time = time.time()
                 if current_time - last_stats_broadcast_time > stats_update_interval:
                     self.update_and_broadcast_statistics()
                     last_stats_broadcast_time = current_time
