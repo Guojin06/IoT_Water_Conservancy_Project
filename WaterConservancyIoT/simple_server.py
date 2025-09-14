@@ -62,17 +62,24 @@ class WaterIoTHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "Username and password are required"}).encode())
                 return
 
-            # 修正: authenticate_user 现在返回一个包含用户信息的字典或None
             user_info = auth_service.authenticate_user(username, password)
 
             if user_info:
-                # 从认证成功后的用户信息中创建token
+                # 认证成功，现在为该用户创建令牌
                 token = auth_service.create_jwt_token(user_info['id'])
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"token": token}).encode())
+                if token:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"token": token}).encode())
+                else:
+                    # 如果因某种原因令牌创建失败
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "Could not create token"}).encode())
             else:
+                # 认证失败
                 self.send_response(401)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()

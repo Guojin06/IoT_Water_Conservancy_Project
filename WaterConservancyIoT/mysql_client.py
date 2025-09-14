@@ -149,7 +149,8 @@ class MySQLClient:
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """根据用户名查询用户信息"""
-        query = "SELECT id, username, password_hash, role FROM users WHERE username = %s"
+        # 修正: 使用正确的列名 `user_id` 并用别名 `id` 返回，以兼容上层代码
+        query = "SELECT user_id as id, username, password_hash, role FROM users WHERE username = %s"
         cursor = None
         try:
             cursor = self.connection.cursor(dictionary=True)
