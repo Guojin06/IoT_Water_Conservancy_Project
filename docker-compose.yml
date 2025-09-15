@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: water_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: yourpassword
+      MYSQL_DATABASE: sensordatabase
+      MYSQL_USER: water_user
+      MYSQL_PASSWORD: water_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./WaterConservancyIoT/create_database.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - water_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: water_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - water_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Python后端应用
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: water_app
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+      - "8081:8081"
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=water_user
+      - MYSQL_PASSWORD=water_pass
+      - MYSQL_DATABASE=sensordatabase
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./WaterConservancyIoT:/app
+    networks:
+      - water_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python start_production.py
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  water_network:
+    driver: bridge

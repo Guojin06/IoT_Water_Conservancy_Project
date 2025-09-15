@@ -126,6 +126,48 @@
             margin-bottom: 10px;
         }
         
+        .icon-container svg {
+            transition: all 0.3s ease;
+        }
+        
+        .nav-button:hover .icon-container svg {
+            transform: scale(1.1);
+            filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.5));
+        }
+        
+        /* 监控大屏图标动画 */
+        @keyframes dashboardPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .nav-button:hover #dashboardGrad stop:first-child {
+            animation: dashboardPulse 2s infinite;
+        }
+        
+        /* 系统管理齿轮旋转动画 */
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .nav-button:hover svg g {
+            transform-origin: 12px 12px;
+            animation: rotate 3s linear infinite;
+        }
+        
+        /* AI分析神经网络闪烁动画 */
+        @keyframes neuralPulse {
+            0%, 100% { opacity: 0.7; }
+            25% { opacity: 1; }
+            50% { opacity: 0.7; }
+            75% { opacity: 1; }
+        }
+        
+        .nav-button:hover svg circle {
+            animation: neuralPulse 1.5s infinite;
+        }
+        
         .nav-title {
             font-size: 20px;
             font-weight: bold;
@@ -192,7 +234,30 @@
             <div class="grid-container">
                 <a href="dashboard.html" class="grid-item">
                     <div class="icon-container">
-                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNjRmZmRhIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTMgMytoNnY2SDN6TTIxIDN2NmgtNlYzem0wIDEyaC02djZoNnptLTYtMTJIOVYzem0wIDZoNm0tNiA0djZtNC02bDMgM20zLTNsLTMgMyIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEiLz48L3N2Zz4=" alt="监控大屏">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="dashboardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#0099CC;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                            <!-- 外框 -->
+                            <rect x="2" y="3" width="20" height="14" rx="2" stroke="url(#dashboardGrad)" stroke-width="2" fill="none"/>
+                            <!-- 屏幕 -->
+                            <rect x="3" y="4" width="18" height="12" rx="1" fill="rgba(0,212,255,0.1)"/>
+                            <!-- 数据图表 -->
+                            <path d="M6 14L8 11L11 13L14 8L17 10" stroke="url(#dashboardGrad)" stroke-width="2" fill="none"/>
+                            <!-- 数据点 -->
+                            <circle cx="6" cy="14" r="1.5" fill="#00D4FF"/>
+                            <circle cx="8" cy="11" r="1.5" fill="#00D4FF"/>
+                            <circle cx="11" cy="13" r="1.5" fill="#00D4FF"/>
+                            <circle cx="14" cy="8" r="1.5" fill="#00D4FF"/>
+                            <circle cx="17" cy="10" r="1.5" fill="#00D4FF"/>
+                            <!-- 支架 -->
+                            <path d="M8 17H16" stroke="url(#dashboardGrad)" stroke-width="2"/>
+                            <path d="M10 17V20H14V17" stroke="url(#dashboardGrad)" stroke-width="2" fill="none"/>
+                            <path d="M8 20H16" stroke="url(#dashboardGrad)" stroke-width="2"/>
+                        </svg>
                     </div>
                     <h2>监控大屏</h2>
                     <p>专业水利监控大屏，实时数据可视化</p>
@@ -200,7 +265,42 @@
                 
                 <a href="system-management.html" class="grid-item">
                     <div class="icon-container">
-                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNjRmZmRhIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIvPjxwYXRoIGQ9Ik0xOS40IDE0LjZMMjEgMTJtLTEuNiA3LjRsMS40LTEuNG0tMS40LTEuNGwxLjQtMS40bS00LjYtMS44bC44LTEuMm0tMi4yLTYuNGwuOC0xLjJtNi44IDYuNmwxLjQtMS40bS0xLjQtMS40bDEuNC0xLjRtLTEuNC0xLjRsMS40LTEuNG0tNC45LTEuNWwuOC0xLjJtLTIuMi02LjRsLjgtMS4ybS0yLjItNi40bC44LTEuMm0tNC45IDEuNWwuOC0xLjJtNi44IDYuNmwxLjQtMS40TTQuNiA0LjZMMiA2bTEuNiA3LjRMMiAxMm0xLjYtNy40TDIgMTJtNC45IDEuNWwtLjgtMS4yTTYuOCA5LjZsLS44LTEuMk0yIDZMMiA2bTEuNC0xLjRMMiA2TTIgNmwxLjQtMS40Ii8+PC9zdmc+" alt="系统管理">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="systemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#0099CC;stop-opacity:1" />
+                                </linearGradient>
+                                <filter id="glow">
+                                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                    <feMerge> 
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            <!-- 主齿轮 -->
+                            <circle cx="12" cy="12" r="3" fill="none" stroke="url(#systemGrad)" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="1.5" fill="#00D4FF" filter="url(#glow)"/>
+                            <!-- 齿轮齿 -->
+                            <g stroke="url(#systemGrad)" stroke-width="2" fill="#00D4FF" opacity="0.8">
+                                <rect x="11" y="2" width="2" height="4" rx="1"/>
+                                <rect x="11" y="18" width="2" height="4" rx="1"/>
+                                <rect x="2" y="11" width="4" height="2" rx="1"/>
+                                <rect x="18" y="11" width="4" height="2" rx="1"/>
+                                <rect x="4.9" y="4.9" width="2" height="2.8" rx="1" transform="rotate(45 5.9 6.3)"/>
+                                <rect x="17.1" y="17.1" width="2" height="2.8" rx="1" transform="rotate(45 18.1 18.5)"/>
+                                <rect x="4.9" y="16.3" width="2" height="2.8" rx="1" transform="rotate(-45 5.9 17.7)"/>
+                                <rect x="17.1" y="4.1" width="2" height="2.8" rx="1" transform="rotate(-45 18.1 5.5)"/>
+                            </g>
+                            <!-- 小齿轮装饰 -->
+                            <g opacity="0.6">
+                                <circle cx="7" cy="7" r="1" fill="#00D4FF"/>
+                                <circle cx="17" cy="7" r="1" fill="#00D4FF"/>
+                                <circle cx="7" cy="17" r="1" fill="#00D4FF"/>
+                                <circle cx="17" cy="17" r="1" fill="#00D4FF"/>
+                            </g>
+                        </svg>
                     </div>
                     <h2>系统管理</h2>
                     <p>查看所有传感器状态与详细信息</p>
@@ -208,12 +308,52 @@
 
                 <a href="ai-analysis.html" class="grid-item">
                     <div class="icon-container">
-                        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNjRmZmRhIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDJ2Nm02IDRoNm0tNi00bC0zIDNtMy0zbC0zLTNtLTYgNGgtNm02LTR2Nm0wIDRoNm0tNiA0djZtNC02bDMgM20zLTNsLTMgMyIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEiLz48L3N2Zz4=" alt="AI智能分析">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="aiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
+                                    <stop offset="50%" style="stop-color:#00FFAA;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#0099CC;stop-opacity:1" />
+                                </linearGradient>
+                                <filter id="aiGlow">
+                                    <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                    <feMerge> 
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            <!-- 大脑外形 -->
+                            <path d="M9 2C7 2 5.5 3.5 5.5 5.5C5.5 6 5.7 6.4 6 6.7C5.4 7.2 5 8 5 9C5 10.1 5.9 11 7 11C7.2 11 7.4 11 7.6 10.9C7.2 11.5 7 12.2 7 13C7 15.2 8.8 17 11 17H13C15.2 17 17 15.2 17 13C17 12.2 16.8 11.5 16.4 10.9C16.6 11 16.8 11 17 11C18.1 11 19 10.1 19 9C19 8 18.6 7.2 18 6.7C18.3 6.4 18.5 6 18.5 5.5C18.5 3.5 17 2 15 2C14 2 13.1 2.4 12.5 3.1C12.3 3 12.2 3 12 3C11.8 3 11.7 3 11.5 3.1C10.9 2.4 10 2 9 2Z" 
+                                  fill="url(#aiGrad)" opacity="0.3" stroke="url(#aiGrad)" stroke-width="1.5"/>
+                            <!-- 神经网络节点 -->
+                            <g filter="url(#aiGlow)">
+                                <circle cx="8" cy="7" r="1.5" fill="#00D4FF"/>
+                                <circle cx="12" cy="8" r="1.5" fill="#00FFAA"/>
+                                <circle cx="16" cy="7" r="1.5" fill="#00D4FF"/>
+                                <circle cx="9" cy="11" r="1.5" fill="#00FFAA"/>
+                                <circle cx="15" cy="11" r="1.5" fill="#00D4FF"/>
+                                <circle cx="12" cy="14" r="1.5" fill="#00FFAA"/>
+                            </g>
+                            <!-- 神经网络连接 -->
+                            <g stroke="url(#aiGrad)" stroke-width="1" opacity="0.7">
+                                <line x1="8" y1="7" x2="12" y2="8"/>
+                                <line x1="12" y1="8" x2="16" y2="7"/>
+                                <line x1="8" y1="7" x2="9" y2="11"/>
+                                <line x1="16" y1="7" x2="15" y2="11"/>
+                                <line x1="12" y1="8" x2="9" y2="11"/>
+                                <line x1="12" y1="8" x2="15" y2="11"/>
+                                <line x1="9" y1="11" x2="12" y2="14"/>
+                                <line x1="15" y1="11" x2="12" y2="14"/>
+                            </g>
+                            <!-- AI标识 -->
+                            <text x="12" y="21" text-anchor="middle" fill="url(#aiGrad)" font-size="8" font-weight="bold">AI</text>
+                        </svg>
                     </div>
                     <h2>AI智能分析</h2>
                     <p>机器学习预测，智能决策支持</p>
-                </a>
-            </div>
+            </a>
+        </div>
         </main>
         
         <div class="system-info">
@@ -242,7 +382,7 @@
             © 2025 智能水利物联网系统 | 技术支持：IoT开发团队
         </div>
     </div>
-    
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // 登出逻辑
@@ -264,8 +404,8 @@
                     timeElement.textContent = now.toLocaleTimeString('zh-CN');
                 }
             }
-            setInterval(updateTime, 1000);
-            updateTime();
+        setInterval(updateTime, 1000);
+        updateTime();
         });
     </script>
 </body>
